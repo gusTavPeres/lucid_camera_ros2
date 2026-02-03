@@ -1,0 +1,105 @@
+# Configuração de Múltiplas Câmeras Lucid Vision
+# Projeto: Carro Autônomo
+#
+# Este arquivo define as câmeras que serão iniciadas pelo launch file.
+# Copie este arquivo para cameras.yaml e ajuste os seriais das suas câmeras.
+#
+# Para descobrir os seriais das câmeras:
+#   python3 /arena_camera_ros2/scripts/list_cameras.py
+
+cameras:
+  # Câmera Frontal
+  - name: camera_front
+    serial: "CAMERA_SERIAL_1"  # Substitua pelo serial real
+    topic: /camera/front/image_raw
+    width: 1920
+    height: 1200
+    pixelformat: rgb8
+    exposure_time: 10000  # microsegundos
+    gain: 0.0
+    qos_reliability: reliable
+    trigger_mode: false
+
+  # Câmera Frontal Esquerda
+  - name: camera_front_left
+    serial: "CAMERA_SERIAL_2"
+    topic: /camera/front_left/image_raw
+    width: 1920
+    height: 1200
+    pixelformat: rgb8
+    exposure_time: 10000
+    gain: 0.0
+    qos_reliability: reliable
+    trigger_mode: false
+
+  # Câmera Frontal Direita
+  - name: camera_front_right
+    serial: "CAMERA_SERIAL_3"
+    topic: /camera/front_right/image_raw
+    width: 1920
+    height: 1200
+    pixelformat: rgb8
+    exposure_time: 10000
+    gain: 0.0
+    qos_reliability: reliable
+    trigger_mode: false
+
+  # Câmera Lateral Esquerda
+  - name: camera_left
+    serial: "CAMERA_SERIAL_4"
+    topic: /camera/left/image_raw
+    width: 1920
+    height: 1200
+    pixelformat: rgb8
+    exposure_time: 10000
+    gain: 0.0
+    qos_reliability: reliable
+    trigger_mode: false
+
+  # Câmera Lateral Direita
+  - name: camera_right
+    serial: "CAMERA_SERIAL_5"
+    topic: /camera/right/image_raw
+    width: 1920
+    height: 1200
+    pixelformat: rgb8
+    exposure_time: 10000
+    gain: 0.0
+    qos_reliability: reliable
+    trigger_mode: false
+
+  # Câmera Traseira Esquerda
+  - name: camera_rear_left
+    serial: "CAMERA_SERIAL_6"
+    topic: /camera/rear_left/image_raw
+    width: 1920
+    height: 1200
+    pixelformat: rgb8
+    exposure_time: 10000
+    gain: 0.0
+    qos_reliability: reliable
+    trigger_mode: false
+
+  # Câmera Traseira Direita
+  - name: camera_rear_right
+    serial: "CAMERA_SERIAL_7"
+    topic: /camera/rear_right/image_raw
+    width: 1920
+    height: 1200
+    pixelformat: rgb8
+    exposure_time: 10000
+    gain: 0.0
+    qos_reliability: reliable
+    trigger_mode: false
+
+  # Câmera Traseira
+  - name: camera_rear
+    serial: "CAMERA_SERIAL_8"
+    topic: /camera/rear/image_raw
+    width: 1920
+    height: 1200
+    pixelformat: rgb8
+    exposure_time: 10000
+    gain: 0.0
+    qos_reliability: reliable
+    trigger_mode: false

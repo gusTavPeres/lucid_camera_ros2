@@ -1,0 +1,19 @@
+# Git
+.git/
+.gitignore
+
+# Build artifacts (serão recriados no container)
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+# Bags
+bags/
+
+# Docs
+README.md
+*.md
+
+# IDE
+.vscode/
+.idea/

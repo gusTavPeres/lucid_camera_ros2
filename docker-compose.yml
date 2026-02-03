@@ -1,0 +1,121 @@
+# Docker Compose para Lucid Vision Cameras - ROS2 Humble
+# Projeto: Carro Autônomo
+#
+# USO:
+#   Build:    docker compose build
+#   Subir:    docker compose up -d
+#   Logs:     docker compose logs -f
+#   Shell:    docker compose exec camera_dev bash
+#   Parar:    docker compose down
+#
+# ESCALABILIDADE:
+#   Para adicionar mais câmeras, copie o serviço camera_X e ajuste:
+#   - container_name
+#   - CAMERA_SERIAL
+#   - CAMERA_TOPIC
+#   - Porta de visualização (se usar web)
+
+services:
+  # ============================================================================
+  # CONTAINER DE DESENVOLVIMENTO
+  # Use este para testes, debugging e desenvolvimento
+  # ============================================================================
+  camera_dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lucid_camera_dev
+    volumes:
+      # Workspace ROS2 (persistente para desenvolvimento)
+      - ./ros2_ws:/arena_camera_ros2/ros2_ws
+      # Scripts auxiliares
+      - ./scripts:/arena_camera_ros2/scripts
+      # Launch files
+      - ./launch:/arena_camera_ros2/launch
+      # Configurações
+      - ./config:/arena_camera_ros2/config
+      # Pasta para bags gravados
+      - ./bags:/arena_camera_ros2/bags
+      # X11 para visualização
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    environment:
+      - DISPLAY=${DISPLAY}
+      - ROS_DOMAIN_ID=0
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      # Variáveis para identificação da câmera (opcional)
+      - CAMERA_SERIAL=
+      - CAMERA_TOPIC=/arena_camera_node/images
+    # Modo host para acesso direto à rede (necessário para GigE Vision)
+    network_mode: host
+    # Privilegiado para acesso ao hardware
+    privileged: true
+    # IPC compartilhado para melhor performance
+    ipc: host
+    stdin_open: true
+    tty: true
+    # Restart automático em caso de falha
+    restart: unless-stopped
+    command: bash
+
+  # ============================================================================
+  # CÂMERA 1 - Produção
+  # Descomente e configure o serial da câmera
+  # ============================================================================
+  # camera_1:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: lucid_camera_1
+  #   volumes:
+  #     - ./ros2_ws:/arena_camera_ros2/ros2_ws:ro
+  #     - ./bags:/arena_camera_ros2/bags
+  #     - /tmp/.X11-unix:/tmp/.X11-unix
+  #   environment:
+  #     - DISPLAY=${DISPLAY}
+  #     - ROS_DOMAIN_ID=0
+  #     - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+  #     - CAMERA_SERIAL=YOUR_CAMERA_1_SERIAL
+  #     - CAMERA_TOPIC=/camera_1/image_raw
+  #   network_mode: host
+  #   privileged: true
+  #   ipc: host
+  #   restart: unless-stopped
+  #   command: >
+  #     bash -c "source /opt/ros/humble/setup.bash &&
+  #              source /arena_camera_ros2/ros2_ws/install/setup.bash &&
+  #              ros2 run arena_camera_node start --ros-args
+  #              -p serial:=$${CAMERA_SERIAL}
+  #              -p topic:=$${CAMERA_TOPIC}
+  #              -p pixelformat:=rgb8
+  #              -p qos_reliability:=reliable"
+
+  # ============================================================================
+  # CÂMERA 2-8 - Copie o bloco acima e ajuste os parâmetros
+  # ============================================================================
+  # camera_2:
+  #   ...
+  #   environment:
+  #     - CAMERA_SERIAL=YOUR_CAMERA_2_SERIAL
+  #     - CAMERA_TOPIC=/camera_2/image_raw
+
+  # ============================================================================
+  # GRAVADOR DE BAGS (Opcional)
+  # Grava todas as imagens de todas as câmeras
+  # ============================================================================
+  # bag_recorder:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: lucid_bag_recorder
+  #   volumes:
+  #     - ./bags:/arena_camera_ros2/bags
+  #   environment:
+  #     - ROS_DOMAIN_ID=0
+  #     - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+  #   network_mode: host
+  #   ipc: host
+  #   restart: unless-stopped
+  #   command: >
+  #     bash -c "source /opt/ros/humble/setup.bash &&
+  #              cd /arena_camera_ros2/bags &&
+  #              ros2 bag record -a -s mcap"

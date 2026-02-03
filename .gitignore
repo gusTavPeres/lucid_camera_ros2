@@ -1,0 +1,38 @@
+# Build artifacts
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+ros2_ws/persist.json
+ros2_ws/.vscode/
+ros2_ws/DEPRECATED/
+*.pyc
+__pycache__/
+
+# Bags (podem ser grandes)
+bags/*
+!bags/.gitkeep
+
+# Arquivos grandes do SDK (devem ser baixados separadamente)
+# Instruções no README para baixar do site da Lucid Vision
+resources/ArenaSDK/linux64/*.tar.gz
+resources/arena_api/*.whl
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Config local (copiar de cameras_example.yaml)
+config/cameras.yaml
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporários
+*.tmp
+*~
