@@ -7,6 +7,33 @@ de 1 ate 8 cameras sem dor de cabeca.
 O driver oficial da Lucid so vinha preparado pro ROS2 Eloquent e nao funcionava de cara.
 Esse repositorio resolve isso e ja entrega tudo pronto pra rodar no Humble.
 
+## ✨ Novos Recursos
+
+### 📡 Streaming Multi-PC
+Transmita vídeo da câmera entre dois PCs via ROS2 (LAN ou VPN):
+- ✅ Suporte completo para Fedora Kinoite (Toolbox + ROS2 Humble)
+- ✅ Configuração automática de rede (multicast, Discovery Server, Tailscale)
+- ✅ Viewer otimizado com demosaicing de Bayer em tempo real
+- ✅ Estatísticas de FPS e banda em tempo real
+
+**➡️ [Guia Completo de Streaming](STREAMING.md)**
+
+### 🎬 Conversão de Bags para Vídeo MP4
+Script otimizado para converter ROS2 bags em vídeo:
+- ✅ Auto-detecta resolução, FPS e formato
+- ✅ Suporta Bayer RAW (faz demosaicing automático)
+- ✅ Codec H.264 para melhor compressão
+- ✅ Qualidade configurável
+
+```bash
+# Exemplo
+python3 scripts/bag_to_video.py --topic /camera/image_raw --output video.mp4
+```
+
+**Documentação:** [Ver seção Gravação de Bags](#gravar-um-bag-salvar-os-dados-da-camera) + [STREAMING.md](STREAMING.md)
+
+---
+
 ## O que voce precisa ter
 
 - **Docker** e **Docker Compose** instalados no PC
@@ -23,24 +50,33 @@ Esse repositorio resolve isso e ja entrega tudo pronto pra rodar no Humble.
 
 ```
 lucid_camera_ros2/
-├── Dockerfile                  # Receita do container (ROS2 Humble + ArenaSDK)
-├── docker-compose.yml          # Define os servicos (camera, gravador, etc)
+├── Dockerfile                     # Receita do container (ROS2 Humble + ArenaSDK)
+├── docker-compose.yml             # Define os servicos (camera, gravador, etc)
+├── STREAMING.md                   # 📡 Guia completo de streaming multi-PC
 ├── resources/
-│   ├── ArenaSDK/linux64/       # SDK da Lucid (baixar do site, nao vai pro git)
-│   └── arena_api/              # API Python da Lucid (baixar do site)
+│   ├── ArenaSDK/linux64/          # SDK da Lucid (baixar do site, nao vai pro git)
+│   └── arena_api/                 # API Python da Lucid (baixar do site)
 ├── ros2_ws/src/
-│   └── arena_camera_node/      # Pacote ROS2 que fala com a camera
+│   └── arena_camera_node/         # Pacote ROS2 que fala com a camera
 ├── scripts/
-│   ├── setup_network.sh        # Configura a rede do PC pras cameras GigE
-│   ├── list_cameras.py         # Mostra todas as cameras conectadas
-│   ├── start_camera.sh         # Atalho pra ligar uma camera
-│   ├── focus_helper.py         # Ajuda a focar a lente (mostra score de nitidez)
-│   └── live_viewer.py          # Mostra a imagem da camera ao vivo numa janela
+│   ├── setup_network.sh           # Configura a rede do PC pras cameras GigE
+│   ├── list_cameras.py            # Mostra todas as cameras conectadas
+│   ├── start_camera.sh            # Atalho pra ligar uma camera
+│   ├── focus_helper.py            # Ajuda a focar a lente (mostra score de nitidez)
+│   ├── live_viewer.py             # Mostra a imagem da camera ao vivo numa janela
+│   ├── bag_to_video.py            # 🎬 Converte bags para MP4 (suporta Bayer RAW)
+│   └── compress_bayer_stream.py   # 🗜️ Comprime stream Bayer para economizar banda
 ├── launch/
-│   └── multi_camera.launch.py  # Liga varias cameras de uma vez
+│   ├── multi_camera.launch.py     # Liga varias cameras de uma vez
+│   └── camera_streaming.launch.py # 📡 Launch otimizado para streaming
 ├── config/
-│   └── cameras_example.yaml    # Modelo de config pras 8 cameras
-└── bags/                       # Onde ficam os bags gravados
+│   └── cameras_example.yaml       # Modelo de config pras 8 cameras
+├── notebook_setup/                # 💻 Setup do notebook receptor (Fedora Kinoite)
+│   ├── README.md                  # Guia passo a passo
+│   ├── setup_toolbox.sh           # Instala ROS2 Humble no Toolbox
+│   ├── configure_network.sh       # Configura rede ROS2 (multicast/server/VPN)
+│   └── stream_viewer.py           # Viewer otimizado com suporte a Bayer
+└── bags/                          # Onde ficam os bags gravados
 ```
 
 ## Instalacao passo a passo
@@ -355,6 +391,31 @@ Mudancas feitas:
 3. **OpenCV do SDK linkado** no `Findarena_sdk.cmake` (resolvia erro de undefined reference)
 4. **Bug `True`/`true`** corrigido no `ArenaCameraNode.cpp`
 5. **Coisas novas**: scripts auxiliares, launch file multi-camera, config YAML, focus helper
+6. **Streaming multi-PC**: suporte completo para transmissão ROS2 entre PCs (LAN/VPN)
+7. **Bag to video**: conversão otimizada de bags para MP4 com suporte a Bayer RAW
+
+## 📚 Guias e Documentação
+
+- 📘 **[README Principal](README.md)** - Setup básico da câmera (você está aqui)
+- 📡 **[STREAMING.md](STREAMING.md)** - Guia completo de streaming multi-PC
+- 💻 **[notebook_setup/README.md](notebook_setup/README.md)** - Setup do notebook receptor (Fedora Kinoite)
+- 🎬 **bag_to_video.py** - Ver [STREAMING.md](STREAMING.md#gravação-de-bags-e-conversão-para-vídeo)
+
+## 🚀 Links Rápidos
+
+### Primeira vez usando?
+1. [Instalação passo a passo](#instalacao-passo-a-passo)
+2. [Como usar](#como-usar)
+3. [Modo RAW (BayerRG8)](#modo-raw-bayerrg8)
+
+### Já tem a câmera funcionando?
+- 📡 [Configurar streaming entre PCs](STREAMING.md)
+- 🎬 [Converter bags para vídeo](STREAMING.md#gravação-de-bags-e-conversão-para-vídeo)
+- 🔧 [Problemas comuns](#problemas-comuns)
+
+### Setup do notebook receptor
+- 💻 [Guia completo Fedora Kinoite](notebook_setup/README.md)
+- 🌐 [Configurar rede ROS2](STREAMING.md#configuração-de-rede)
 
 ## Licenca
 
