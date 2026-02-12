@@ -210,11 +210,74 @@ ros2 launch /arena_camera_ros2/launch/multi_camera.launch.py \
 | topic           | Nome do topico onde publica as imagens   | /arena_camera_node/images |
 | width           | Largura da imagem em pixels              | maximo da camera          |
 | height          | Altura da imagem em pixels               | maximo da camera          |
-| pixelformat     | Formato de cor (rgb8, bgr8, mono8, etc)  | rgb8                      |
+| pixelformat     | Formato de cor (rgb8, bgr8, mono8, bayer_rggb8, etc)  | rgb8                      |
 | gain            | Ganho do sensor (brilho)                 | 0.0                       |
 | exposure_time   | Tempo de exposicao em microsegundos      | 10000                     |
 | trigger_mode    | Se true, so tira foto quando pedir       | false                     |
 | qos_reliability | Confiabilidade da comunicacao ROS        | reliable                  |
+
+## Modo RAW (BayerRG8)
+
+Para capturar imagens direto do sensor sem processamento de cor (modo RAW), use o formato `bayer_rggb8`:
+
+### Iniciar camera em modo RAW
+```bash
+# Jeito rapido (com script)
+/arena_camera_ros2/scripts/start_camera_raw.sh 243901923 /camera/image_raw
+
+# Jeito manual
+ros2 run arena_camera_node start --ros-args \
+    -p serial:=243901923 \
+    -p topic:=/camera/image_raw \
+    -p pixelformat:=bayer_rggb8
+```
+
+### Visualizar imagem RAW
+
+**Opção 1: Viewer direto da API Arena (mais rápido)**
+```bash
+python3 /arena_camera_ros2/scripts/live_viewer_raw.py
+# Pressione 'r' para alternar entre RAW e RGB
+# Pressione 's' para salvar frame (salva RAW e RGB)
+```
+
+**Opção 2: Viewer ROS2 (subscreve no tópico)**
+```bash
+python3 /arena_camera_ros2/scripts/live_viewer_ros_raw.py
+# Pressione 'r' para alternar entre RAW e RGB
+# Pressione 's' para salvar frame
+```
+
+**Opção 3: rqt_image_view**
+```bash
+ros2 run rqt_image_view rqt_image_view /camera/image_raw
+# O rqt automaticamente faz o demosaicing do Bayer para visualização
+```
+
+### Formatos Bayer suportados
+
+A câmera Triton TRI032S usa um sensor com filtro Bayer **RGGB**. Formatos disponíveis:
+- `bayer_rggb8` - 8 bits, padrão Red-Green-Green-Blue (BayerRG8)
+- `bayer_rggb16` - 16 bits, padrão RGGB
+- `bayer_bggr8`, `bayer_gbrg8`, `bayer_grbg8` - outros padrões Bayer
+
+**Importante**: A câmera TRI032S usa BayerRG8 nativamente. Use `bayer_rggb8` para obter dados RAW sem conversão.
+
+### Conversão Bayer para RGB
+
+Para processar imagens Bayer, use OpenCV:
+```python
+import cv2
+raw_img = cv2.imread('frame_raw.png', cv2.IMREAD_GRAYSCALE)
+rgb_img = cv2.cvtColor(raw_img, cv2.COLOR_BayerRG2RGB)
+```
+
+Ou use o pacote ROS2 `image_proc` para fazer demosaicing em tempo real:
+```bash
+ros2 run image_proc debayer --ros-args \
+    -r image_raw:=/camera/image_raw \
+    -r image_color:=/camera/image_color
+```
 
 ## Problemas comuns
 
