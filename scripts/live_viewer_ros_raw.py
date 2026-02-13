@@ -7,6 +7,7 @@ Pressione 'q' para sair, 's' para salvar um frame, 'r' para alternar RAW/RGB.
 import sys
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
@@ -22,11 +23,16 @@ class BayerImageViewer(Node):
         topic_name = self.get_parameter('topic').value
 
         self.bridge = CvBridge()
+        qos_profile = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+            depth=10
+        )
         self.subscription = self.create_subscription(
             Image,
             topic_name,
             self.image_callback,
-            10)
+            qos_profile)
 
         self.frame_count = 0
         self.show_raw = False  # Por padrão mostra RGB (demosaiced)
@@ -47,19 +53,18 @@ class BayerImageViewer(Node):
                     display_arr = raw_arr
                     mode_text = "RAW"
                 else:
-                    # Converter BayerRG para RGB
-                    # msg.encoding deve ser 'bayer_rggb8'
+                    # Converter Bayer para BGR (OpenCV usa BGR)
+                    # Nota: ROS2 bayer_rggb8 mapeia para OpenCV BayerBG (nomenclatura invertida)
                     if 'rggb' in msg.encoding.lower():
-                        rgb_arr = cv2.cvtColor(raw_arr, cv2.COLOR_BayerRG2RGB)
+                        rgb_arr = cv2.cvtColor(raw_arr, cv2.COLOR_BayerBG2BGR)
                     elif 'bggr' in msg.encoding.lower():
-                        rgb_arr = cv2.cvtColor(raw_arr, cv2.COLOR_BayerBG2RGB)
+                        rgb_arr = cv2.cvtColor(raw_arr, cv2.COLOR_BayerRG2BGR)
                     elif 'gbrg' in msg.encoding.lower():
-                        rgb_arr = cv2.cvtColor(raw_arr, cv2.COLOR_BayerGB2RGB)
+                        rgb_arr = cv2.cvtColor(raw_arr, cv2.COLOR_BayerGR2BGR)
                     elif 'grbg' in msg.encoding.lower():
-                        rgb_arr = cv2.cvtColor(raw_arr, cv2.COLOR_BayerGR2RGB)
+                        rgb_arr = cv2.cvtColor(raw_arr, cv2.COLOR_BayerGB2BGR)
                     else:
-                        # Fallback: tentar RG
-                        rgb_arr = cv2.cvtColor(raw_arr, cv2.COLOR_BayerRG2RGB)
+                        rgb_arr = cv2.cvtColor(raw_arr, cv2.COLOR_BayerBG2BGR)
 
                     display_arr = rgb_arr
                     mode_text = "RGB (demosaiced)"
@@ -93,7 +98,7 @@ class BayerImageViewer(Node):
                 self.get_logger().info('Encerrando...')
                 rclpy.shutdown()
             elif key == ord('s'):
-                filename = f'/arena_camera_ros2/bags/ros_frame_{self.frame_count}.png'
+                filename = f'ros_frame_{self.frame_count}.png'
                 cv2.imwrite(filename, display_arr)
                 self.get_logger().info(f'Frame salvo: {filename}')
             elif key == ord('r'):

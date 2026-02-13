@@ -57,12 +57,13 @@ class BayerCompressor(Node):
         )
 
         # Detectar padrão Bayer
+        # Nota: ROS2 Bayer naming é invertido vs OpenCV
         self.bayer_conversion = None
         self.bayer_patterns = {
-            'bayer_rggb8': cv2.COLOR_BayerRG2RGB,
-            'bayer_bggr8': cv2.COLOR_BayerBG2RGB,
-            'bayer_gbrg8': cv2.COLOR_BayerGB2RGB,
-            'bayer_grbg8': cv2.COLOR_BayerGR2RGB,
+            'bayer_rggb8': cv2.COLOR_BayerBG2BGR,
+            'bayer_bggr8': cv2.COLOR_BayerRG2BGR,
+            'bayer_gbrg8': cv2.COLOR_BayerGR2BGR,
+            'bayer_grbg8': cv2.COLOR_BayerGB2BGR,
         }
 
         self.get_logger().info(f'📥 Subscrito: {input_topic}')
@@ -84,13 +85,13 @@ class BayerCompressor(Node):
                     )
                     return
 
-            # Converter Bayer → RGB
-            raw_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='mono8')
-            rgb_img = cv2.cvtColor(raw_img, self.bayer_conversion)
+            # Converter Bayer → BGR
+            raw_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
+            bgr_img = cv2.cvtColor(raw_img, self.bayer_conversion)
 
             # Comprimir em JPEG
             encode_params = [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality]
-            success, buffer = cv2.imencode('.jpg', rgb_img, encode_params)
+            success, buffer = cv2.imencode('.jpg', bgr_img, encode_params)
 
             if not success:
                 self.get_logger().warn('⚠️  Falha ao comprimir frame')

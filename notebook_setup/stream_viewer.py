@@ -67,10 +67,10 @@ class StreamViewer(Node):
         self.is_bayer = False
         self.bayer_conversion = None
         self.bayer_patterns = {
-            'bayer_rggb8': cv2.COLOR_BayerRG2BGR,
-            'bayer_bggr8': cv2.COLOR_BayerBG2BGR,
-            'bayer_gbrg8': cv2.COLOR_BayerGB2BGR,
-            'bayer_grbg8': cv2.COLOR_BayerGR2BGR,
+            'bayer_rggb8': cv2.COLOR_BayerBG2BGR,
+            'bayer_bggr8': cv2.COLOR_BayerRG2BGR,
+            'bayer_gbrg8': cv2.COLOR_BayerGR2BGR,
+            'bayer_grbg8': cv2.COLOR_BayerGB2BGR,
         }
 
         # QoS para streaming (best effort = menor latência)
@@ -148,7 +148,7 @@ class StreamViewer(Node):
             # Converter para OpenCV
             if self.is_bayer:
                 # Bayer: guardar RAW e versão RGB
-                raw_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='mono8')
+                raw_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
                 rgb_img = cv2.cvtColor(raw_img, self.bayer_conversion)
 
                 self.current_frame_raw = raw_img

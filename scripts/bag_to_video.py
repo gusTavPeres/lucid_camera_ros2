@@ -27,6 +27,7 @@ Argumentos:
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 from sensor_msgs.msg import Image, CompressedImage
 from cv_bridge import CvBridge
 import cv2
@@ -61,6 +62,15 @@ class BagToVideo(Node):
         self.timestamps = deque(maxlen=100)
         self.calculated_fps = None
 
+        # QoS compatível com bag play (RELIABLE) e live streaming (BEST_EFFORT)
+        # Usando BEST_EFFORT para compatibilidade com bags gravados de streams BEST_EFFORT
+        qos_profile = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=10
+        )
+
         # Detectar se o tópico é compressed
         if '/compressed' in topic or topic.endswith('compressed'):
             self.is_compressed = True
@@ -68,7 +78,7 @@ class BagToVideo(Node):
                 CompressedImage,
                 topic,
                 self.compressed_callback,
-                10
+                qos_profile
             )
             self.get_logger().info(f'📹 Subscrito a tópico COMPRIMIDO: {topic}')
         else:
@@ -76,7 +86,7 @@ class BagToVideo(Node):
                 Image,
                 topic,
                 self.image_callback,
-                10
+                qos_profile
             )
             self.get_logger().info(f'📹 Subscrito a tópico RAW: {topic}')
 
@@ -85,15 +95,16 @@ class BagToVideo(Node):
 
     def detect_bayer_pattern(self, encoding):
         """Detecta se é formato Bayer e retorna o código de conversão OpenCV."""
+        # Nota: ROS2 Bayer naming é invertido vs OpenCV
         bayer_patterns = {
-            'bayer_rggb8': cv2.COLOR_BayerRG2BGR,
-            'bayer_bggr8': cv2.COLOR_BayerBG2BGR,
-            'bayer_gbrg8': cv2.COLOR_BayerGB2BGR,
-            'bayer_grbg8': cv2.COLOR_BayerGR2BGR,
-            'bayer_rggb16': cv2.COLOR_BayerRG2BGR,
-            'bayer_bggr16': cv2.COLOR_BayerBG2BGR,
-            'bayer_gbrg16': cv2.COLOR_BayerGB2BGR,
-            'bayer_grbg16': cv2.COLOR_BayerGR2BGR,
+            'bayer_rggb8': cv2.COLOR_BayerBG2BGR,
+            'bayer_bggr8': cv2.COLOR_BayerRG2BGR,
+            'bayer_gbrg8': cv2.COLOR_BayerGR2BGR,
+            'bayer_grbg8': cv2.COLOR_BayerGB2BGR,
+            'bayer_rggb16': cv2.COLOR_BayerBG2BGR,
+            'bayer_bggr16': cv2.COLOR_BayerRG2BGR,
+            'bayer_gbrg16': cv2.COLOR_BayerGR2BGR,
+            'bayer_grbg16': cv2.COLOR_BayerGB2BGR,
         }
         return bayer_patterns.get(encoding.lower())
 
