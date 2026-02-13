@@ -108,8 +108,10 @@ WORKDIR /arena_camera_ros2/ros2_ws
 COPY ./scripts/arena_camera_ros_entrypoint.sh /
 RUN chmod +x /arena_camera_ros_entrypoint.sh
 
-# Copiar launch files
+# Copiar launch files e scripts
 COPY ./launch /arena_camera_ros2/launch
+COPY ./scripts /arena_camera_ros2/scripts
+COPY ./notebook_setup /arena_camera_ros2/notebook_setup
 
 ENTRYPOINT ["/arena_camera_ros_entrypoint.sh"]
 CMD ["bash"]
