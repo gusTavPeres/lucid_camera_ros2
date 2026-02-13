@@ -37,9 +37,10 @@ services:
       # Pasta para bags gravados
       - ./bags:/arena_camera_ros2/bags
       # X11 para visualização
-      - /tmp/.X11-unix:/tmp/.X11-unix
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
     environment:
-      - DISPLAY=${DISPLAY}
+      - DISPLAY=${DISPLAY:-:0}
+      - QT_X11_NO_MITSHM=1
       - ROS_DOMAIN_ID=0
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
       # Variáveis para identificação da câmera (opcional)
