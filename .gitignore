@@ -15,8 +15,16 @@ bags/*
 # Arquivos grandes do SDK (devem ser baixados separadamente)
 # Instruções no README para baixar do site da Lucid Vision
 resources/ArenaSDK/linux64/*.tar.gz
+resources/ArenaSDK/linux64/ArenaSDK_Linux_x64/
+resources/ArenaSDK/linux64/ArenaViewMP*/
 resources/ArenaSDK/ArenaSDK_Linux_x64/
 resources/arena_api/*.whl
+resources/arena_api/*.zip
+resources/arena_api/docs/
+resources/arena_api/examples/
+resources/arena_api/offline_installation_dependencies.zip
+resources/arena_api/LICENSE.txt
+resources/arena_api/README.txt
 
 # IDE
 .vscode/
@@ -29,6 +37,7 @@ config/cameras.yaml
 
 # Logs
 *.log
+nohup.out
 
 # OS
 .DS_Store
