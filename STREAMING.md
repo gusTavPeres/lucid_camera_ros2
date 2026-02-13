@@ -284,7 +284,7 @@ ros2 topic list  # Deve mostrar /camera/image_raw
 
 ### Modo 3: Tailscale VPN (Rede Remota)
 
-**Quando usar:** Simular ambiente Synkar, teste remoto, internet
+**Quando usar:** Teste remoto, conexão via internet, redes diferentes
 
 **Instalar Tailscale (ambos os PCs):**
 

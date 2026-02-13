@@ -58,7 +58,7 @@ O script vai perguntar:
 |------|------------|
 | **Multicast** | Mesma rede local (switch/roteador), configuração mais simples |
 | **Discovery Server** | Rede corporativa ou quando multicast não funciona |
-| **Tailscale VPN** | Simular ambiente Synkar ou teste remoto |
+| **Tailscale VPN** | Conexão via internet ou redes diferentes |
 
 ---
 
