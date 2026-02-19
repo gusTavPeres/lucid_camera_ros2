@@ -1,28 +1,32 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<!-- FastDDS profile para o PC receptor (Ubuntu + Docker)
-     Limita o DDS a usar as interfaces LAN do Ubuntu PC.
+<!-- FastDDS profile para PC receptor com múltiplas interfaces de rede.
+     Força o subscriber a anunciar apenas os IPs LAN acessíveis.
+     Mantém built-in transports (mais compatível).
      Ajuste os IPs conforme as interfaces do seu PC receptor.
 -->
 <profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
-  <transport_descriptors>
-    <transport_descriptor>
-      <transport_id>udpv4_lan</transport_id>
-      <type>UDPv4</type>
-      <interfaceWhiteList>
-        <!-- IPs LAN do Ubuntu PC receptor -->
-        <address>192.168.3.156</address>
-        <address>192.168.3.42</address>
-        <!-- Loopback -->
-        <address>127.0.0.1</address>
-      </interfaceWhiteList>
-    </transport_descriptor>
-  </transport_descriptors>
   <participant profile_name="default_participant" is_default_profile="true">
     <rtps>
-      <userTransports>
-        <transport_id>udpv4_lan</transport_id>
-      </userTransports>
-      <useBuiltinTransports>false</useBuiltinTransports>
+      <!-- IP anunciado para dados unicast (o publisher envia para cá) -->
+      <defaultUnicastLocatorList>
+        <locator>
+          <udpv4>
+            <address>192.168.3.156</address>
+            <port>0</port>
+          </udpv4>
+        </locator>
+      </defaultUnicastLocatorList>
+      <!-- IP anunciado para mensagens de descoberta/controle -->
+      <builtin>
+        <metatrafficUnicastLocatorList>
+          <locator>
+            <udpv4>
+              <address>192.168.3.156</address>
+              <port>0</port>
+            </udpv4>
+          </locator>
+        </metatrafficUnicastLocatorList>
+      </builtin>
     </rtps>
   </participant>
 </profiles>
