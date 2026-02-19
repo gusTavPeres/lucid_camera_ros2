@@ -11,6 +11,10 @@ TOPIC=${2:-"/camera/image_raw"}
 source /opt/ros/humble/setup.bash
 source /arena_camera_ros2/ros2_ws/install/setup.bash 2>/dev/null || true
 
+# FastDDS: restringir ao IP WiFi (evitar anunciar interface da câmera GigE)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export FASTRTPS_DEFAULT_PROFILES_FILE="$(dirname "$SCRIPT_DIR")/config/fastdds_multipc.xml"
+
 # Configurar LD_LIBRARY_PATH
 export LD_LIBRARY_PATH=/ArenaSDK_Linux_x64/lib64:/ArenaSDK_Linux_x64/GenICam/library/lib/Linux64_x64:/ArenaSDK_Linux_x64/OpenCV/lib:${LD_LIBRARY_PATH}
 
