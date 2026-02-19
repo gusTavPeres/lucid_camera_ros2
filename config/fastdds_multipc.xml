@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<!-- FastDDS profile para o TRANSMISSOR com múltiplas interfaces.
-     Força o publisher a anunciar apenas o IP WiFi (acessível pelo receptor).
-     Mantém built-in transports (mais compatível).
-     Ajuste o IP para o IP WiFi do seu notebook transmissor.
+<!-- FastDDS profile para o TRANSMISSOR (notebook com câmera).
+     Restringe o publisher a anunciar apenas o IP WiFi (192.168.3.155)
+     como locator de dados — evita anunciar a interface GigE da câmera
+     (169.254.x.x) que não é acessível pelo receptor.
+     O bloco <builtin> é omitido para preservar descoberta por multicast.
 -->
 <profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
   <participant profile_name="default_participant" is_default_profile="true">
     <rtps>
-      <!-- IP anunciado para dados unicast -->
+      <!-- Anuncia apenas o IP WiFi do notebook para receber dados de volta -->
       <defaultUnicastLocatorList>
         <locator>
           <udpv4>
@@ -16,17 +17,6 @@
           </udpv4>
         </locator>
       </defaultUnicastLocatorList>
-      <!-- IP anunciado para mensagens de descoberta/controle -->
-      <builtin>
-        <metatrafficUnicastLocatorList>
-          <locator>
-            <udpv4>
-              <address>192.168.3.155</address>
-              <port>0</port>
-            </udpv4>
-          </locator>
-        </metatrafficUnicastLocatorList>
-      </builtin>
     </rtps>
   </participant>
 </profiles>

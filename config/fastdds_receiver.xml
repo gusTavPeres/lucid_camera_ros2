@@ -1,32 +1,23 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<!-- FastDDS profile para PC receptor com múltiplas interfaces de rede.
-     Força o subscriber a anunciar apenas os IPs LAN acessíveis.
-     Mantém built-in transports (mais compatível).
-     Ajuste os IPs conforme as interfaces do seu PC receptor.
+<!-- FastDDS profile para PC receptor.
+     Restringe o subscriber a anunciar apenas o IP WiFi (192.168.3.42)
+     como locator de dados — o publisher enviará dados somente para cá.
+     O bloco <builtin> é intencionalmente omitido para preservar a
+     descoberta via multicast (239.255.0.1:17900), que continuará
+     funcionando normalmente.
 -->
 <profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
   <participant profile_name="default_participant" is_default_profile="true">
     <rtps>
-      <!-- IP anunciado para dados unicast (o publisher envia para cá) -->
+      <!-- Anuncia apenas o IP WiFi do PC receptor para receber dados -->
       <defaultUnicastLocatorList>
         <locator>
           <udpv4>
-            <address>192.168.3.156</address>
+            <address>192.168.3.42</address>
             <port>0</port>
           </udpv4>
         </locator>
       </defaultUnicastLocatorList>
-      <!-- IP anunciado para mensagens de descoberta/controle -->
-      <builtin>
-        <metatrafficUnicastLocatorList>
-          <locator>
-            <udpv4>
-              <address>192.168.3.156</address>
-              <port>0</port>
-            </udpv4>
-          </locator>
-        </metatrafficUnicastLocatorList>
-      </builtin>
     </rtps>
   </participant>
 </profiles>
