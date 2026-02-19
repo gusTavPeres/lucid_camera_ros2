@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- FastDDS profile para comunicação multi-PC via WiFi
+     Limita o DDS a usar apenas a interface WiFi (192.168.3.155)
+     para evitar que o DDS use a interface de câmera (enp45s0 / 169.254.x.x)
+     que não é acessível pelo PC receptor.
+
+     Uso:
+       export FASTRTPS_DEFAULT_PROFILES_FILE=/path/to/fastdds_multipc.xml
+       (antes de iniciar o camera node ou qualquer nó ROS2 que precisa de comunicação multi-PC)
+-->
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <transport_descriptors>
+    <transport_descriptor>
+      <transport_id>udpv4_wifi</transport_id>
+      <type>UDPv4</type>
+      <interfaceWhiteList>
+        <!-- Interface WiFi do notebook transmissor -->
+        <address>192.168.3.155</address>
+        <!-- Loopback para comunicação local -->
+        <address>127.0.0.1</address>
+      </interfaceWhiteList>
+    </transport_descriptor>
+  </transport_descriptors>
+  <participant profile_name="default_participant" is_default_profile="true">
+    <rtps>
+      <userTransports>
+        <transport_id>udpv4_wifi</transport_id>
+      </userTransports>
+      <useBuiltinTransports>false</useBuiltinTransports>
+    </rtps>
+  </participant>
+</profiles>
