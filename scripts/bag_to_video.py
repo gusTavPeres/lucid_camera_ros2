@@ -58,8 +58,9 @@ class BagToVideo(Node):
         self.is_compressed = False
         self.is_bayer = False
 
-        # Para calcular FPS
+        # Para calcular FPS (usando timestamps das mensagens ROS)
         self.timestamps = deque(maxlen=100)
+        self.msg_timestamps = deque(maxlen=100)
         self.calculated_fps = None
 
         # QoS compatível com bag play (RELIABLE) e live streaming (BEST_EFFORT)
@@ -187,6 +188,11 @@ class BagToVideo(Node):
     def image_callback(self, msg):
         """Callback para imagens raw (Image)."""
         try:
+            # Registrar timestamp da mensagem (ns → s)
+            msg_ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+            if msg_ts > 0:
+                self.msg_timestamps.append(msg_ts)
+
             # Primeira frame: detectar parâmetros
             if self.writer is None:
                 self.width = msg.width
@@ -201,17 +207,14 @@ class BagToVideo(Node):
                     self.get_logger().info(f'🎨 Formato Bayer detectado: {msg.encoding}')
                     self.get_logger().info(f'🔄 Demosaicing será aplicado automaticamente')
 
-                # Calcular FPS
-                self.timestamps.append(time.time())
-                fps = 30  # padrão inicial
-
+                # FPS inicial: 30 (será recalculado)
+                fps = self.target_fps if self.target_fps else 30
                 self.initialize_writer(self.width, self.height, fps)
 
             # Converter imagem ROS → OpenCV
             if self.is_bayer:
-                # Para Bayer: converter manualmente
-                # CvBridge converte para mono8, depois fazemos demosaicing
-                raw_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='mono8')
+                # Para Bayer: usar passthrough para preservar padrão raw, depois demosaicing
+                raw_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
                 frame = cv2.cvtColor(raw_img, self.bayer_conversion)
             else:
                 # Para RGB/BGR: conversão direta

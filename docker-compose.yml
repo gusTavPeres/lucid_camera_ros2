@@ -41,7 +41,7 @@ services:
     environment:
       - DISPLAY=${DISPLAY:-:0}
       - QT_X11_NO_MITSHM=1
-      - ROS_DOMAIN_ID=0
+      - ROS_DOMAIN_ID=42
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
       # Variáveis para identificação da câmera (opcional)
       - CAMERA_SERIAL=
@@ -73,7 +73,7 @@ services:
   #     - /tmp/.X11-unix:/tmp/.X11-unix
   #   environment:
   #     - DISPLAY=${DISPLAY}
-  #     - ROS_DOMAIN_ID=0
+  #     - ROS_DOMAIN_ID=42
   #     - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
   #     - CAMERA_SERIAL=YOUR_CAMERA_1_SERIAL
   #     - CAMERA_TOPIC=/camera_1/image_raw
@@ -111,7 +111,7 @@ services:
   #   volumes:
   #     - ./bags:/arena_camera_ros2/bags
   #   environment:
-  #     - ROS_DOMAIN_ID=0
+  #     - ROS_DOMAIN_ID=42
   #     - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
   #   network_mode: host
   #   ipc: host
@@ -119,4 +119,4 @@ services:
   #   command: >
   #     bash -c "source /opt/ros/humble/setup.bash &&
   #              cd /arena_camera_ros2/bags &&
-  #              ros2 bag record -a -s mcap"
+  #              ros2 bag record -a"

@@ -18,19 +18,20 @@ Transmita vídeo da câmera entre dois PCs via ROS2 (LAN ou VPN):
 
 **➡️ [Guia Completo de Streaming](STREAMING.md)**
 
-### 🎬 Conversão de Bags para Vídeo MP4
-Script otimizado para converter ROS2 bags em vídeo:
-- ✅ Auto-detecta resolução, FPS e formato
-- ✅ Suporta Bayer RAW (faz demosaicing automático)
-- ✅ Codec H.264 para melhor compressão
-- ✅ Qualidade configurável
+### 🎬 Gravação e Conversão de Vídeo
 
+Dois modos de gravação disponíveis:
+
+**Gravação direta em MP4** (recomendado, sem bag):
 ```bash
-# Exemplo
-python3 scripts/bag_to_video.py --topic /camera/image_raw --output video.mp4
+python3 scripts/record_video.py --output camera.mp4          # grava indefinidamente (Ctrl+C)
+python3 scripts/record_video.py --duration 60                # grava 60 segundos
 ```
 
-**Documentação:** [Ver seção Gravação de Bags](#gravar-um-bag-salvar-os-dados-da-camera) + [STREAMING.md](STREAMING.md)
+**Converter bag existente para MP4** (um único comando):
+```bash
+python3 scripts/convert_bag.py ./minha_bag --output video.mp4
+```
 
 ---
 
@@ -63,8 +64,12 @@ lucid_camera_ros2/
 │   ├── list_cameras.py            # Mostra todas as cameras conectadas
 │   ├── start_camera.sh            # Atalho pra ligar uma camera
 │   ├── focus_helper.py            # Ajuda a focar a lente (mostra score de nitidez)
-│   ├── live_viewer.py             # Mostra a imagem da camera ao vivo numa janela
-│   ├── bag_to_video.py            # 🎬 Converte bags para MP4 (suporta Bayer RAW)
+│   ├── live_viewer.py             # Viewer Arena direto (câmera livre, sem nó ROS2)
+│   ├── live_viewer_raw.py         # Viewer Arena direto, formato Bayer RAW
+│   ├── live_viewer_ros_raw.py     # ✅ Viewer ROS2 (funciona com nó rodando)
+│   ├── record_video.py            # 🎬 Grava stream diretamente em MP4
+│   ├── convert_bag.py             # 🎬 Converte bag para MP4 (comando único)
+│   ├── bag_to_video.py            # Subscriber MP4 (usado por convert_bag.py)
 │   └── compress_bayer_stream.py   # 🗜️ Comprime stream Bayer para economizar banda
 ├── launch/
 │   ├── multi_camera.launch.py     # Liga varias cameras de uma vez
@@ -173,10 +178,10 @@ ros2 run arena_camera_node start --ros-args \
 
 ### Ver a imagem ao vivo
 
-Abra outro terminal no container:
+Abra outro terminal no container e rode o viewer ROS2 (funciona com o nó da câmera rodando):
 ```bash
 docker compose exec camera_dev bash
-python3 /arena_camera_ros2/scripts/live_viewer.py
+python3 /arena_camera_ros2/scripts/live_viewer_ros_raw.py
 ```
 
 Ou, se tiver ROS2 no PC host:
@@ -184,17 +189,35 @@ Ou, se tiver ROS2 no PC host:
 ros2 run rqt_image_view rqt_image_view /camera/image_raw
 ```
 
-### Gravar um bag (salvar os dados da camera)
+> **Nota:** `live_viewer.py` e `live_viewer_raw.py` usam a Arena API diretamente e só
+> funcionam quando **nenhum** nó ROS2 está usando a câmera (câmera livre).
 
+### Gravar vídeo
+
+**Opção A — Gravar direto em MP4** (recomendado, mais simples):
 ```bash
 docker compose exec camera_dev bash
+source /opt/ros/humble/setup.bash && source /arena_camera_ros2/ros2_ws/install/setup.bash
 cd /arena_camera_ros2/bags
-source /opt/ros/humble/setup.bash
-ros2 bag record /camera/image_raw -s mcap
+python3 /arena_camera_ros2/scripts/record_video.py --output camera.mp4
+# Ctrl+C para parar e salvar
 ```
 
-Os bags ficam salvos na pasta `bags/` que eh compartilhada com o PC host.
-Ctrl+C pra parar de gravar.
+**Opção B — Gravar bag** (formato ROS2 nativo):
+```bash
+docker compose exec camera_dev bash
+source /opt/ros/humble/setup.bash
+cd /arena_camera_ros2/bags
+ros2 bag record /camera/image_raw
+# Ctrl+C para parar
+```
+
+**Converter bag para MP4** (um único comando):
+```bash
+python3 /arena_camera_ros2/scripts/convert_bag.py ./minha_bag --output video.mp4
+```
+
+Os arquivos ficam salvos na pasta `bags/` que é compartilhada com o PC host.
 
 ### Checar se ta tudo rodando
 
@@ -305,7 +328,8 @@ Para processar imagens Bayer, use OpenCV:
 ```python
 import cv2
 raw_img = cv2.imread('frame_raw.png', cv2.IMREAD_GRAYSCALE)
-rgb_img = cv2.cvtColor(raw_img, cv2.COLOR_BayerRG2RGB)
+# ROS2 bayer_rggb8 → OpenCV usa BayerBG (nomenclatura invertida)
+bgr_img = cv2.cvtColor(raw_img, cv2.COLOR_BayerBG2BGR)
 ```
 
 Ou use o pacote ROS2 `image_proc` para fazer demosaicing em tempo real:

@@ -70,35 +70,35 @@ ros2 run arena_camera_node start --ros-args \
 
 ```bash
 docker compose exec camera_dev bash
-ros2 run rqt_image_view rqt_image_view /camera/image_raw
+source /opt/ros/humble/setup.bash && source /arena_camera_ros2/ros2_ws/install/setup.bash
+python3 /arena_camera_ros2/scripts/live_viewer_ros_raw.py
+# Pressione 'q' para sair, 'r' para alternar RAW/RGB, 's' para salvar frame
 ```
 
 ---
 
-## 📼 Gravar Bag
+## 🎬 Gravar Vídeo
 
+**Opção A — Gravar direto em MP4** (recomendado):
+```bash
+docker compose exec camera_dev bash
+source /opt/ros/humble/setup.bash && source /arena_camera_ros2/ros2_ws/install/setup.bash
+cd /arena_camera_ros2/bags
+python3 /arena_camera_ros2/scripts/record_video.py --output camera.mp4
+# Ctrl+C para parar e salvar automaticamente
+```
+
+**Opção B — Gravar bag ROS2**:
 ```bash
 cd /arena_camera_ros2/bags
 ros2 bag record /camera/image_raw -o minha_gravacao
+# Ctrl+C para parar
 ```
 
-Pare com **Ctrl+C** após alguns segundos.
-
----
-
-## 🎬 Converter Bag para Vídeo
-
-**Terminal 1:**
+**Converter bag para MP4** (único comando):
 ```bash
-python3 /arena_camera_ros2/scripts/bag_to_video.py --topic /camera/image_raw --output video.mp4
+python3 /arena_camera_ros2/scripts/convert_bag.py ./minha_gravacao --output video.mp4
 ```
-
-**Terminal 2:**
-```bash
-ros2 bag play minha_gravacao
-```
-
-Aguarde o bag play terminar. O vídeo será gerado automaticamente.
 
 ---
 
