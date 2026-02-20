@@ -87,19 +87,22 @@ lucid_camera_ros2/
 
 ## Camera Node Parameters
 
-| Parameter       | Description                                         | Default                 |
-|-----------------|-----------------------------------------------------|-------------------------|
-| `serial`        | Camera serial number (integer)                      | first available         |
-| `topic`         | ROS2 topic name                                     | `/arena_camera_node/images` |
-| `pixelformat`   | `bayer_rggb8`, `rgb8`, `bgr8`, `mono8`, etc.       | `rgb8`                  |
-| `width`         | Image width in pixels                               | camera maximum          |
-| `height`        | Image height in pixels                              | camera maximum          |
-| `gain`          | Sensor gain in dB                                   | `0.0`                   |
-| `exposure_time` | Exposure in microseconds                            | camera default          |
-| `trigger_mode`  | `true` = triggered, `false` = continuous            | `false`                 |
+| Parameter         | Description                                       | Default                 |
+|-------------------|---------------------------------------------------|-------------------------|
+| `serial`          | Camera serial number (integer)                    | first available         |
+| `topic`           | ROS2 topic name                                   | `/arena_camera_node/images` |
+| `pixelformat`     | `bayer_rggb8`, `rgb8`, `bgr8`, `mono8`, etc.     | `rgb8`                  |
+| `width`           | Image width in pixels                             | camera maximum          |
+| `height`          | Image height in pixels                            | camera maximum          |
+| `gain`            | Sensor gain in dB                                 | `0.0`                   |
+| `exposure_time`   | Exposure in microseconds                          | camera default          |
+| `frame_rate`      | Target acquisition frame rate in FPS              | camera default          |
+| `trigger_mode`    | `true` = triggered, `false` = continuous          | `false`                 |
 | `qos_reliability` | `reliable` or `best_effort`                       | `reliable`              |
 
-**Note:** `pixelformat` and `gain`/`exposure_time` are startup-only parameters and cannot be changed at runtime without restarting the node.
+**Note:** All parameters are startup-only and cannot be changed at runtime without restarting the node.
+
+**`frame_rate` and `exposure_time` interaction:** The actual frame rate is limited by whichever is lower: the `frame_rate` setting or `1 / exposure_time`. For maximum FPS, set `exposure_time` short enough to allow it. Example for 33 FPS: `frame_rate:=33.0 exposure_time:=25000` (25 ms exposure allows up to 40 FPS).
 
 **Bayer RAW:** Triton cameras use BayerRG8 natively. Use `pixelformat:=bayer_rggb8` for zero-copy RAW data. When processing in OpenCV:
 ```python
@@ -117,6 +120,8 @@ Stream camera images from the camera machine to a remote receiver over LAN or VP
 
 When a machine has multiple network interfaces (e.g., GigE camera port + WiFi), FastDDS advertises all interface IPs as data locators. The remote subscriber may then try to send data to the GigE camera IP (169.254.x.x), which is not reachable. FastDDS unicast profiles restrict which IP is advertised.
 
+The publisher profile also includes the loopback address (`127.0.0.1`) so that co-located processes on the same machine (e.g., the compression relay) can communicate at full speed without routing raw camera data over a physical network interface.
+
 ### Setup
 
 **On the camera machine** (publisher):
@@ -124,11 +129,13 @@ When a machine has multiple network interfaces (e.g., GigE camera port + WiFi), 
 # Generate FastDDS profile for the streaming interface
 ./config/setup_fastdds.sh publisher <streaming-interface>
 # Example: ./config/setup_fastdds.sh publisher wlan0
+# This creates fastdds_publisher.xml with 127.0.0.1 (local) + <streaming-ip> (remote)
 
-# Start camera node (script sets the profile automatically)
-./scripts/start_camera.sh <serial> /camera/image_raw bayer_rggb8
+# Start camera node at full FPS
+./scripts/start_camera.sh <serial> /camera/image_raw bayer_rggb8 "" "" 20.0 25000 33.0
+#                          serial   topic             pixelformat  W  H  gain  exposure fps
 
-# Start compression relay (in another terminal)
+# Start compression relay (in another terminal or background)
 bash ./notebook_setup/compress_stream.sh /camera/image_raw
 ```
 
@@ -154,13 +161,13 @@ python3 /arena_camera_ros2/notebook_setup/stream_viewer.py \
 
 ### Bandwidth comparison
 
-| Method              | Resolution  | Rate    | Bandwidth    |
-|---------------------|-------------|---------|--------------|
-| RAW throttled       | 1024×768    | 15 FPS  | ~12 Mbps     |
-| JPEG compressed q=80| 2048×1536   | 30 FPS  | ~8-15 Mbps   |
-| RAW full            | 2048×1536   | 35 FPS  | ~175 Mbps    |
+| Method               | Resolution  | Rate    | Bandwidth     | Notes                          |
+|----------------------|-------------|---------|---------------|--------------------------------|
+| RAW throttled        | 1024×768    | 15 FPS  | ~12 Mbps      | Low resolution only            |
+| JPEG compressed q=80 | 2048×1536   | 33 FPS  | ~35-45 Mbps   | Full res at full rate (WiFi OK)|
+| RAW full             | 2048×1536   | 33 FPS  | ~825 Mbps     | Requires 1 GbE link            |
 
-JPEG compression is the recommended approach for streaming: it delivers full resolution at full frame rate within WiFi bandwidth.
+JPEG compression is the recommended approach for streaming: it delivers full resolution at full frame rate within WiFi bandwidth. The compression relay (`compress_bayer_stream.py`) uses a multi-threaded encoder pool for throughput.
 
 ### Streaming over VPN (WireGuard)
 
@@ -259,9 +266,11 @@ The upstream [arena_camera_ros2](https://github.com/lucidvisionlabs/arena_camera
 2. **ArenaSDK installation** via `Arena_SDK.conf` (non-interactive)
 3. **OpenCV linking** fixed in `Findarena_sdk.cmake`
 4. **Bug fix**: `True` → `true` in `ArenaCameraNode.cpp`
-5. **Added**: multi-machine streaming with FastDDS unicast profiles
-6. **Added**: JPEG compression relay for bandwidth-efficient streaming
-7. **Added**: multi-camera launch, YAML config, focus helper, video recording/conversion
+5. **Added parameter**: `frame_rate` — sets `AcquisitionFrameRateEnable=true` and `AcquisitionFrameRate` on the camera hardware, enabling precise FPS control up to the camera's maximum (e.g., 33.5 FPS for TRI032S at 2048×1536)
+6. **Added**: multi-machine streaming with FastDDS unicast profiles
+7. **Added**: JPEG compression relay for bandwidth-efficient streaming, with multi-threaded encoder (`--workers N`) for full-rate throughput
+8. **Added**: multi-camera launch, YAML config, focus helper, video recording/conversion
+9. **FastDDS publisher profile**: now advertises both loopback (`127.0.0.1`) and the streaming interface IP, enabling local co-processes to communicate at full speed while remote subscribers use the network interface
 
 ---
 

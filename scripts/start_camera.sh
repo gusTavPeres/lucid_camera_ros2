@@ -4,7 +4,7 @@
 # Starts the arena_camera_node ROS2 publisher for a Lucid Vision camera.
 #
 # Usage:
-#   ./start_camera.sh [serial] [topic] [pixelformat] [width] [height] [gain] [exposure_us]
+#   ./start_camera.sh [serial] [topic] [pixelformat] [width] [height] [gain] [exposure_us] [fps]
 #
 # Arguments (all optional):
 #   serial      : Camera serial number (default: first available camera)
@@ -14,11 +14,16 @@
 #   height      : Image height in pixels (default: camera maximum)
 #   gain        : Sensor gain in dB (default: 0.0)
 #   exposure_us : Exposure time in microseconds (default: camera auto)
+#                 Note: valid range varies by camera. For TRI032S: 30–29696 us.
+#                 If exposure_auto is on, this sets the initial value only.
+#   fps         : Target frame rate (default: camera max). Set AcquisitionFrameRate.
+#                 Note: max FPS depends on resolution and sensor. For TRI032S at
+#                 2048x1536: max ~33.5 FPS. Set exposure_us short enough to allow it.
 #
 # Examples:
-#   ./start_camera.sh                          # first camera, full resolution, RAW
-#   ./start_camera.sh 123456789                # specific camera by serial
-#   ./start_camera.sh 123456789 /cam/image_raw bayer_rggb8 1024 768 10.0
+#   ./start_camera.sh                                    # first camera, full resolution
+#   ./start_camera.sh 123456789                          # specific camera by serial
+#   ./start_camera.sh 123456789 /cam bayer_rggb8 "" "" 20.0 25000 33.0
 
 SERIAL=${1:-""}
 TOPIC=${2:-"/camera/image_raw"}
@@ -27,6 +32,7 @@ WIDTH=${4:-""}
 HEIGHT=${5:-""}
 GAIN=${6:-""}
 EXPOSURE=${7:-""}
+FPS=${8:-""}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
@@ -54,6 +60,7 @@ ARGS="-p topic:=$TOPIC -p pixelformat:=$PIXELFORMAT"
 [ -n "$HEIGHT" ]   && ARGS="$ARGS -p height:=$HEIGHT"
 [ -n "$GAIN" ]     && ARGS="$ARGS -p gain:=$GAIN"
 [ -n "$EXPOSURE" ] && ARGS="$ARGS -p exposure_time:=$EXPOSURE"
+[ -n "$FPS" ]      && ARGS="$ARGS -p frame_rate:=$FPS"
 
 echo "Starting camera node..."
 [ -n "$SERIAL" ] && echo "  Serial:      $SERIAL" || echo "  Serial:      (first available)"
@@ -62,6 +69,7 @@ echo "  Pixelformat: $PIXELFORMAT"
 [ -n "$WIDTH" ]    && echo "  Resolution:  ${WIDTH}x${HEIGHT}"
 [ -n "$GAIN" ]     && echo "  Gain:        $GAIN dB"
 [ -n "$EXPOSURE" ] && echo "  Exposure:    $EXPOSURE us"
+[ -n "$FPS" ]      && echo "  Frame rate:  $FPS FPS"
 echo ""
 
 ros2 run arena_camera_node start --ros-args $ARGS

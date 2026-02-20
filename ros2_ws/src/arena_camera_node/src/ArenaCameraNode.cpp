@@ -46,6 +46,10 @@ void ArenaCameraNode::parse_parameters_()
     exposure_time_ = this->declare_parameter("exposure_time", -1.0);
     is_passed_exposure_time_ = exposure_time_ >= 0;
 
+    nextParameterToDeclare = "frame_rate";
+    frame_rate_ = this->declare_parameter("frame_rate", -1.0);
+    is_passed_frame_rate_ = frame_rate_ > 0;
+
     nextParameterToDeclare = "trigger_mode";
     trigger_mode_activated_ = this->declare_parameter("trigger_mode", false);
     // no need to is_passed_trigger_mode_ because it is already a boolean
@@ -422,6 +426,7 @@ void ArenaCameraNode::set_nodes_()
   set_nodes_load_default_profile_();
   set_nodes_roi_();
   set_nodes_gain_();
+  set_nodes_frame_rate_();
   set_nodes_pixelformat_();
   set_nodes_exposure_();
   set_nodes_trigger_mode_();
@@ -472,6 +477,16 @@ void ArenaCameraNode::set_nodes_gain_()
     auto nodemap = m_pDevice->GetNodeMap();
     Arena::SetNodeValue<double>(nodemap, "Gain", gain_);
     log_info(std::string("\tGain set to ") + std::to_string(gain_));
+  }
+}
+
+void ArenaCameraNode::set_nodes_frame_rate_()
+{
+  if (is_passed_frame_rate_) {
+    auto nodemap = m_pDevice->GetNodeMap();
+    Arena::SetNodeValue<bool>(nodemap, "AcquisitionFrameRateEnable", true);
+    Arena::SetNodeValue<double>(nodemap, "AcquisitionFrameRate", frame_rate_);
+    log_info(std::string("\tAcquisitionFrameRate set to ") + std::to_string(frame_rate_));
   }
 }
 
