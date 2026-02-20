@@ -1,0 +1,38 @@
+# Lucid Vision Camera - ROS2 Receiver Only
+# Container leve para receber streams sem precisar do ArenaSDK
+
+FROM osrf/ros:humble-desktop
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Instalar dependências básicas para visualização
+RUN apt-get update && apt-get install -y \
+    python3-pip \
+    python3-numpy \
+    python3-opencv \
+    git \
+    net-tools \
+    iputils-ping \
+    # ROS2 ferramentas para visualização
+    ros-humble-image-tools \
+    ros-humble-image-transport \
+    ros-humble-cv-bridge \
+    ros-humble-rqt-image-view \
+    ros-humble-rviz2 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Criar diretório de trabalho
+WORKDIR /lucid_receiver
+
+# Copiar apenas scripts de visualização
+COPY notebook_setup/stream_viewer.py /lucid_receiver/
+COPY scripts/setup_env.sh /lucid_receiver/
+
+# Variáveis de ambiente ROS2
+ENV ROS_DOMAIN_ID=42
+ENV ROS_LOCALHOST_ONLY=0
+
+# Source ROS2 automaticamente
+RUN echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+
+CMD ["bash"]

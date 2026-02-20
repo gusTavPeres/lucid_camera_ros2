@@ -1,65 +1,79 @@
 #!/bin/bash
 # ============================================================================
-# Setup do Toolbox com ROS2 Humble no Fedora Kinoite/Silverblue
+# ROS2 Humble container setup for Fedora Kinoite / Silverblue
 # ============================================================================
 #
-# Este script:
-# 1. Cria um container Toolbox com Ubuntu 22.04
-# 2. Instala ROS2 Humble
-# 3. Instala dependências necessárias (cv_bridge, rqt, etc)
-# 4. Configura o ambiente ROS2
+# Creates an Ubuntu 22.04 container with ROS2 Humble and required dependencies.
+# Supports both Toolbox and Distrobox (preferred on newer Fedora).
 #
-# Uso:
-#   bash setup_toolbox.sh
+# Usage:
+#   bash setup_toolbox.sh [--distrobox]
 #
-# Depois de rodar este script, entre no toolbox com:
-#   toolbox enter ros2-humble
+# After running, enter the container with:
+#   distrobox enter ros2-humble    (if using distrobox)
+#   toolbox enter ros2-humble      (if using toolbox)
 #
 # ============================================================================
 
-set -e  # Sair em caso de erro
+set -e
 
-TOOLBOX_NAME="ros2-humble"
+CONTAINER_NAME="ros2-humble"
 UBUNTU_VERSION="22.04"
 
+# Prefer distrobox if available, fall back to toolbox
+USE_DISTROBOX=false
+if [[ "$1" == "--distrobox" ]] || command -v distrobox &>/dev/null; then
+    USE_DISTROBOX=true
+fi
+
 echo "============================================"
-echo "🚀 Setup ROS2 Humble Toolbox"
+echo "ROS2 Humble Container Setup"
 echo "============================================"
 echo ""
 
-# Verificar se Toolbox está instalado
-if ! command -v toolbox &> /dev/null; then
-    echo "❌ Toolbox não encontrado!"
-    echo "   Instale com: rpm-ostree install toolbox"
-    echo "   Depois reinicie o sistema."
-    exit 1
-fi
-
-# Criar Toolbox com Ubuntu 22.04
-echo "📦 Criando Toolbox '$TOOLBOX_NAME' com Ubuntu $UBUNTU_VERSION..."
-if toolbox list | grep -q "$TOOLBOX_NAME"; then
-    echo "⚠️  Toolbox '$TOOLBOX_NAME' já existe."
-    read -p "   Deseja recriar? (apagará o atual) [y/N]: " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        toolbox rm -f "$TOOLBOX_NAME"
-    else
-        echo "✅ Usando Toolbox existente."
-        exit 0
+if $USE_DISTROBOX; then
+    if ! command -v distrobox &>/dev/null; then
+        echo "Error: distrobox not found."
+        echo "Install with: rpm-ostree install distrobox  (then reboot)"
+        echo "Or use toolbox: bash setup_toolbox.sh (without --distrobox)"
+        exit 1
     fi
+
+    echo "Using distrobox..."
+    if distrobox list 2>/dev/null | grep -q "$CONTAINER_NAME"; then
+        echo "Container '$CONTAINER_NAME' already exists."
+        read -p "Recreate it? [y/N]: " -n 1 -r; echo
+        [[ $REPLY =~ ^[Yy]$ ]] && distrobox rm -f "$CONTAINER_NAME" || { echo "Using existing."; exit 0; }
+    fi
+
+    distrobox create "$CONTAINER_NAME" \
+        --image "docker.io/library/ubuntu:$UBUNTU_VERSION" \
+        --home "$HOME"
+
+    RUN_CMD="distrobox enter $CONTAINER_NAME --"
+else
+    if ! command -v toolbox &>/dev/null; then
+        echo "Error: neither toolbox nor distrobox found."
+        echo "Install distrobox: rpm-ostree install distrobox"
+        exit 1
+    fi
+
+    echo "Using toolbox..."
+    if toolbox list | grep -q "$CONTAINER_NAME"; then
+        echo "Container '$CONTAINER_NAME' already exists."
+        read -p "Recreate it? [y/N]: " -n 1 -r; echo
+        [[ $REPLY =~ ^[Yy]$ ]] && toolbox rm -f "$CONTAINER_NAME" || { echo "Using existing."; exit 0; }
+    fi
+
+    toolbox create "$CONTAINER_NAME" --image "docker.io/library/ubuntu:$UBUNTU_VERSION"
+    RUN_CMD="toolbox run -c $CONTAINER_NAME"
 fi
 
-toolbox create "$TOOLBOX_NAME" --image docker.io/library/ubuntu:$UBUNTU_VERSION
-
 echo ""
-echo "✅ Toolbox criado!"
-echo ""
-echo "📥 Instalando ROS2 Humble e dependências dentro do Toolbox..."
-echo "   (Isso pode levar alguns minutos...)"
+echo "Installing ROS2 Humble inside the container (this takes a few minutes)..."
 echo ""
 
-# Executar comandos dentro do Toolbox
-toolbox run -c "$TOOLBOX_NAME" bash -c '
+$RUN_CMD bash -c '
 set -e
 
 # Atualizar repositórios
@@ -142,21 +156,22 @@ EOF
 fi
 
 echo ""
-echo "✅ Instalação completa!"
+echo "Installation complete!"
 '
 
 echo ""
 echo "============================================"
-echo "✅ Setup concluído com sucesso!"
+echo "Setup complete!"
 echo "============================================"
 echo ""
-echo "Para entrar no Toolbox:"
-echo "  toolbox enter $TOOLBOX_NAME"
+if $USE_DISTROBOX; then
+    echo "Enter the container with:"
+    echo "  distrobox enter $CONTAINER_NAME"
+else
+    echo "Enter the container with:"
+    echo "  toolbox enter $CONTAINER_NAME"
+fi
 echo ""
-echo "Comandos úteis:"
-echo "  ros2 topic list           - Listar tópicos disponíveis"
-echo "  ros2 topic hz <topic>     - Ver FPS de um tópico"
-echo "  ros2 run rqt_image_view rqt_image_view  - Visualizar câmera"
-echo ""
-echo "Próximo passo: configurar a rede (ver README.md)"
+echo "Next step: configure FastDDS for multi-machine streaming:"
+echo "  See README.md -> Multi-machine streaming"
 echo ""

@@ -12,9 +12,10 @@ __pycache__/
 bags/*
 !bags/.gitkeep
 
-# Arquivos grandes do SDK (devem ser baixados separadamente)
-# Instruções no README para baixar do site da Lucid Vision
+# SDK files — download separately from https://thinklucid.com/downloads-hub/
 resources/ArenaSDK/linux64/*.tar.gz
+resources/*.zip
+resources/*.whl
 resources/ArenaSDK/linux64/ArenaSDK_Linux_x64/
 resources/ArenaSDK/linux64/ArenaViewMP*/
 resources/ArenaSDK/ArenaSDK_Linux_x64/
@@ -32,8 +33,12 @@ resources/arena_api/README.txt
 *.swp
 *.swo
 
-# Config local (copiar de cameras_example.yaml)
+# Local config — copy from .example files and edit, do not commit
 config/cameras.yaml
+config/fastdds_publisher.xml
+config/fastdds_subscriber.xml
+config/fastdds_multipc.xml
+config/fastdds_receiver.xml
 
 # Logs
 *.log

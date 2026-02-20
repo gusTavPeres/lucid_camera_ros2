@@ -1,19 +1,16 @@
-# Docker Compose para Lucid Vision Cameras - ROS2 Humble
-# Projeto: Carro Autônomo
+# Docker Compose — Lucid Vision Cameras / ROS2 Humble
 #
-# USO:
-#   Build:    docker compose build
-#   Subir:    docker compose up -d
-#   Logs:     docker compose logs -f
-#   Shell:    docker compose exec camera_dev bash
-#   Parar:    docker compose down
+# Usage:
+#   Build:   docker compose build
+#   Start:   docker compose up -d camera_dev
+#   Shell:   docker compose exec camera_dev bash
+#   Logs:    docker compose logs -f
+#   Stop:    docker compose down
 #
-# ESCALABILIDADE:
-#   Para adicionar mais câmeras, copie o serviço camera_X e ajuste:
-#   - container_name
-#   - CAMERA_SERIAL
-#   - CAMERA_TOPIC
-#   - Porta de visualização (se usar web)
+# Before starting: generate FastDDS profile for this machine:
+#   ./config/setup_fastdds.sh subscriber <interface>   (e.g., eth0, wlan0)
+# Then allow X11 access for graphical viewers:
+#   xhost +local:docker
 
 services:
   # ============================================================================
@@ -43,10 +40,12 @@ services:
       - QT_X11_NO_MITSHM=1
       - ROS_DOMAIN_ID=42
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-      - FASTRTPS_DEFAULT_PROFILES_FILE=/arena_camera_ros2/config/fastdds_receiver.xml
-      # Variáveis para identificação da câmera (opcional)
+      # FastDDS profile restricts DDS to the LAN interface (avoids cross-interface issues).
+      # Generate with: ./config/setup_fastdds.sh subscriber <interface>
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/arena_camera_ros2/config/fastdds_subscriber.xml
+      # Camera identification (used by production camera_N services below)
       - CAMERA_SERIAL=
-      - CAMERA_TOPIC=/arena_camera_node/images
+      - CAMERA_TOPIC=/camera/image_raw
     # Modo host para acesso direto à rede (necessário para GigE Vision)
     network_mode: host
     # Privilegiado para acesso ao hardware

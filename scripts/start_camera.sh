@@ -1,37 +1,67 @@
 #!/bin/bash
+# start_camera.sh
 #
-# Script para iniciar uma câmera Lucid Vision
-# Uso: ./start_camera.sh [serial] [topic]
+# Starts the arena_camera_node ROS2 publisher for a Lucid Vision camera.
 #
+# Usage:
+#   ./start_camera.sh [serial] [topic] [pixelformat] [width] [height] [gain] [exposure_us]
+#
+# Arguments (all optional):
+#   serial      : Camera serial number (default: first available camera)
+#   topic       : ROS2 topic to publish on (default: /camera/image_raw)
+#   pixelformat : bayer_rggb8 | rgb8 | bgr8 | mono8 (default: bayer_rggb8)
+#   width       : Image width in pixels (default: camera maximum)
+#   height      : Image height in pixels (default: camera maximum)
+#   gain        : Sensor gain in dB (default: 0.0)
+#   exposure_us : Exposure time in microseconds (default: camera auto)
+#
+# Examples:
+#   ./start_camera.sh                          # first camera, full resolution, RAW
+#   ./start_camera.sh 123456789                # specific camera by serial
+#   ./start_camera.sh 123456789 /cam/image_raw bayer_rggb8 1024 768 10.0
 
 SERIAL=${1:-""}
 TOPIC=${2:-"/camera/image_raw"}
+PIXELFORMAT=${3:-"bayer_rggb8"}
+WIDTH=${4:-""}
+HEIGHT=${5:-""}
+GAIN=${6:-""}
+EXPOSURE=${7:-""}
 
-# Source ROS2
-source /opt/ros/humble/setup.bash
-source /arena_camera_ros2/ros2_ws/install/setup.bash 2>/dev/null || true
-
-# FastDDS: restringir ao IP WiFi (evitar anunciar interface da câmera GigE)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export FASTRTPS_DEFAULT_PROFILES_FILE="$(dirname "$SCRIPT_DIR")/config/fastdds_multipc.xml"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
-# Configurar LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=/ArenaSDK_Linux_x64/lib64:/ArenaSDK_Linux_x64/GenICam/library/lib/Linux64_x64:/ArenaSDK_Linux_x64/OpenCV/lib:${LD_LIBRARY_PATH}
+# Source ROS2 and workspace
+source /opt/ros/humble/setup.bash
+source "$REPO_DIR/ros2_ws/install/setup.bash" 2>/dev/null || \
+    source /arena_camera_ros2/ros2_ws/install/setup.bash 2>/dev/null || true
 
-# Configurar GENICAM
-export GENICAM_GENTL64_PATH=/ArenaSDK_Linux_x64/lib64
+export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-42}
 
-if [ -z "$SERIAL" ]; then
-    echo "Iniciando câmera (primeira disponível)..."
-    echo "Tópico: $TOPIC"
-    ros2 run arena_camera_node start --ros-args \
-        -p topic:="$TOPIC" \
-        -p pixelformat:=rgb8
-else
-    echo "Iniciando câmera serial: $SERIAL"
-    echo "Tópico: $TOPIC"
-    ros2 run arena_camera_node start --ros-args \
-        -p serial:="$SERIAL" \
-        -p topic:="$TOPIC" \
-        -p pixelformat:=rgb8
+# FastDDS: restrict to the streaming interface (prevents advertising GigE camera port)
+FASTDDS_PROFILE="$REPO_DIR/config/fastdds_publisher.xml"
+if [ ! -f "$FASTDDS_PROFILE" ]; then
+    FASTDDS_PROFILE="$REPO_DIR/config/fastdds_multipc.xml"
 fi
+if [ -f "$FASTDDS_PROFILE" ]; then
+    export FASTRTPS_DEFAULT_PROFILES_FILE="$FASTDDS_PROFILE"
+fi
+
+# Build ros-args
+ARGS="-p topic:=$TOPIC -p pixelformat:=$PIXELFORMAT"
+[ -n "$SERIAL" ]   && ARGS="$ARGS -p serial:=$SERIAL"
+[ -n "$WIDTH" ]    && ARGS="$ARGS -p width:=$WIDTH"
+[ -n "$HEIGHT" ]   && ARGS="$ARGS -p height:=$HEIGHT"
+[ -n "$GAIN" ]     && ARGS="$ARGS -p gain:=$GAIN"
+[ -n "$EXPOSURE" ] && ARGS="$ARGS -p exposure_time:=$EXPOSURE"
+
+echo "Starting camera node..."
+[ -n "$SERIAL" ] && echo "  Serial:      $SERIAL" || echo "  Serial:      (first available)"
+echo "  Topic:       $TOPIC"
+echo "  Pixelformat: $PIXELFORMAT"
+[ -n "$WIDTH" ]    && echo "  Resolution:  ${WIDTH}x${HEIGHT}"
+[ -n "$GAIN" ]     && echo "  Gain:        $GAIN dB"
+[ -n "$EXPOSURE" ] && echo "  Exposure:    $EXPOSURE us"
+echo ""
+
+ros2 run arena_camera_node start --ros-args $ARGS

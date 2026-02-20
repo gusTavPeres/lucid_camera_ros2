@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- FastDDS unicast profile for the subscriber (receiver machine).
+     Copy to fastdds_subscriber.xml and replace YOUR.SUBSCRIBER.IP with the
+     IP of the network interface used for receiving (e.g., LAN or WiFi).
+     Or generate automatically: ./config/setup_fastdds.sh subscriber <interface>
+
+     This profile restricts FastDDS to announce only the specified interface,
+     so the publisher sends data directly to this address.
+     Multicast discovery (239.255.0.1) is preserved (no <builtin> block).
+
+     Important: use the IP of the interface where packets physically arrive,
+     not necessarily the default route interface.
+     Check with: tcpdump -i any udp port 7400 (FastDDS discovery port)
+-->
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <participant profile_name="default_participant" is_default_profile="true">
+    <rtps>
+      <defaultUnicastLocatorList>
+        <locator>
+          <udpv4>
+            <address>YOUR.SUBSCRIBER.IP</address>
+            <port>0</port>
+          </udpv4>
+        </locator>
+      </defaultUnicastLocatorList>
+    </rtps>
+  </participant>
+</profiles>

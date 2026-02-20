@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """
-Script para comprimir stream Bayer em JPEG para economizar banda.
+JPEG compression relay for bandwidth-efficient camera streaming.
 
-Este node:
-1. Subscreve tópico RAW bayer_rggb8 (ex: /camera/image_raw)
-2. Faz demosaicing (Bayer → RGB)
-3. Comprime em JPEG
-4. Publica em /camera/image_raw/compressed
+Subscribes to a raw camera topic (Bayer or RGB), converts frames to JPEG,
+and republishes as CompressedImage. Enables full-resolution streaming at
+full frame rate over bandwidth-constrained links (WiFi, VPN).
 
-Uso:
-    python3 compress_bayer_stream.py --input /camera/image_raw --quality 80
+Typical bandwidth reduction: ~35 Mbps (RAW) → ~5-12 Mbps (JPEG q=80)
 
-Argumentos:
-    --input    : Tópico de entrada (bayer_rggb8)
-    --output   : Tópico de saída (padrão: <input>/compressed)
-    --quality  : Qualidade JPEG 1-100 (padrão: 80)
+Usage:
+    python3 compress_bayer_stream.py [--input TOPIC] [--output TOPIC] [--quality 1-100]
+
+Arguments:
+    --input    : Input topic (default: /camera/image_raw)
+    --output   : Output topic (default: <input>/compressed)
+    --quality  : JPEG quality 1-100 (default: 80)
 """
 
 import rclpy
@@ -24,6 +24,7 @@ from sensor_msgs.msg import Image, CompressedImage
 from cv_bridge import CvBridge
 import cv2
 import argparse
+import time
 
 
 class BayerCompressor(Node):
@@ -33,135 +34,123 @@ class BayerCompressor(Node):
         self.bridge = CvBridge()
         self.jpeg_quality = jpeg_quality
         self.frame_count = 0
+        self.bytes_in = 0
+        self.bytes_out = 0
+        self.t_last_log = time.time()
+        self.fps_count = 0
 
-        # QoS para streaming (best effort)
-        qos_profile = QoSProfile(
+        qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             durability=DurabilityPolicy.VOLATILE,
             depth=10
         )
 
-        # Subscriber (Bayer RAW)
-        self.sub = self.create_subscription(
-            Image,
-            input_topic,
-            self.image_callback,
-            qos_profile
-        )
+        self.sub = self.create_subscription(Image, input_topic, self.image_callback, qos)
+        self.pub = self.create_publisher(CompressedImage, output_topic, qos)
 
-        # Publisher (Compressed JPEG)
-        self.pub = self.create_publisher(
-            CompressedImage,
-            output_topic,
-            qos_profile
-        )
-
-        # Detectar padrão Bayer
-        # Nota: ROS2 Bayer naming é invertido vs OpenCV
-        self.bayer_conversion = None
+        # Bayer pattern mapping (ROS2 naming is inverted vs OpenCV)
         self.bayer_patterns = {
             'bayer_rggb8': cv2.COLOR_BayerBG2BGR,
             'bayer_bggr8': cv2.COLOR_BayerRG2BGR,
             'bayer_gbrg8': cv2.COLOR_BayerGR2BGR,
             'bayer_grbg8': cv2.COLOR_BayerGB2BGR,
         }
+        self.bayer_conversion = None
+        self.encoding = None
 
-        self.get_logger().info(f'📥 Subscrito: {input_topic}')
-        self.get_logger().info(f'📤 Publicando: {output_topic}')
-        self.get_logger().info(f'🗜️  Qualidade JPEG: {jpeg_quality}')
+        self.get_logger().info(f'Input:   {input_topic}')
+        self.get_logger().info(f'Output:  {output_topic}')
+        self.get_logger().info(f'Quality: JPEG q={jpeg_quality}')
 
     def image_callback(self, msg):
         try:
-            # Detectar padrão Bayer na primeira mensagem
-            if self.bayer_conversion is None:
-                encoding = msg.encoding.lower()
-                if encoding in self.bayer_patterns:
-                    self.bayer_conversion = self.bayer_patterns[encoding]
-                    self.get_logger().info(f'🎨 Padrão Bayer detectado: {encoding}')
+            enc = msg.encoding.lower()
+
+            # Detect encoding on first frame
+            if self.encoding is None:
+                self.encoding = enc
+                if enc in self.bayer_patterns:
+                    self.bayer_conversion = self.bayer_patterns[enc]
+                    self.get_logger().info(f'Bayer pattern detected: {enc}')
+                elif enc in ('rgb8', 'bgr8', 'mono8'):
+                    self.get_logger().info(f'Encoding detected: {enc}')
                 else:
                     self.get_logger().error(
-                        f'❌ Encoding não suportado: {encoding}. '
-                        f'Esperado: bayer_rggb8, bayer_bggr8, bayer_gbrg8 ou bayer_grbg8'
+                        f'Unsupported encoding: {enc}. '
+                        f'Expected: bayer_rggb8, bayer_bggr8, bayer_gbrg8, bayer_grbg8, rgb8, bgr8'
                     )
                     return
 
-            # Converter Bayer → BGR
-            raw_img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
-            bgr_img = cv2.cvtColor(raw_img, self.bayer_conversion)
+            # Convert to BGR
+            if self.bayer_conversion is not None:
+                raw = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
+                bgr = cv2.cvtColor(raw, self.bayer_conversion)
+            elif enc == 'rgb8':
+                rgb = self.bridge.imgmsg_to_cv2(msg, desired_encoding='rgb8')
+                bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+            else:
+                bgr = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
 
-            # Comprimir em JPEG
-            encode_params = [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality]
-            success, buffer = cv2.imencode('.jpg', bgr_img, encode_params)
-
+            # Compress to JPEG
+            success, buf = cv2.imencode('.jpg', bgr, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality])
             if not success:
-                self.get_logger().warn('⚠️  Falha ao comprimir frame')
+                self.get_logger().warn('Failed to encode JPEG')
                 return
 
-            # Publicar mensagem comprimida
-            compressed_msg = CompressedImage()
-            compressed_msg.header = msg.header
-            compressed_msg.format = 'jpeg'
-            compressed_msg.data = buffer.tobytes()
+            # Publish
+            out = CompressedImage()
+            out.header = msg.header
+            out.format = 'jpeg'
+            out.data = buf.tobytes()
+            self.pub.publish(out)
 
-            self.pub.publish(compressed_msg)
-
+            # Stats
             self.frame_count += 1
-            if self.frame_count % 100 == 0:
-                original_size = len(msg.data) / 1024  # KB
-                compressed_size = len(compressed_msg.data) / 1024  # KB
-                ratio = (1 - compressed_size / original_size) * 100
+            self.fps_count += 1
+            self.bytes_in += len(msg.data)
+            self.bytes_out += len(out.data)
+
+            now = time.time()
+            dt = now - self.t_last_log
+            if dt >= 1.0:
+                fps = self.fps_count / dt
+                mbps_in = self.bytes_in * 8 / dt / 1e6
+                mbps_out = self.bytes_out * 8 / dt / 1e6
+                ratio = (1 - self.bytes_out / max(self.bytes_in, 1)) * 100
                 self.get_logger().info(
-                    f'📊 Frames: {self.frame_count} | '
-                    f'Original: {original_size:.1f}KB → '
-                    f'Comprimido: {compressed_size:.1f}KB '
-                    f'({ratio:.1f}% economia)'
+                    f'{fps:.1f} FPS | '
+                    f'RAW {mbps_in:.1f} Mbps -> JPEG {mbps_out:.1f} Mbps '
+                    f'({ratio:.0f}% reduction)'
                 )
+                self.fps_count = 0
+                self.bytes_in = 0
+                self.bytes_out = 0
+                self.t_last_log = now
 
         except Exception as e:
-            self.get_logger().error(f'❌ Erro: {e}')
+            self.get_logger().error(f'Error: {e}')
 
 
 def main(args=None):
     parser = argparse.ArgumentParser(
-        description='Comprime stream Bayer em JPEG para economizar banda'
+        description='JPEG compression relay: raw camera topic -> compressed topic'
     )
-    parser.add_argument(
-        '--input',
-        type=str,
-        default='/camera/image_raw',
-        help='Tópico de entrada (bayer_rggb8)'
-    )
-    parser.add_argument(
-        '--output',
-        type=str,
-        default=None,
-        help='Tópico de saída (padrão: <input>/compressed)'
-    )
-    parser.add_argument(
-        '--quality',
-        type=int,
-        default=80,
-        help='Qualidade JPEG 1-100 (padrão: 80)'
-    )
+    parser.add_argument('--input', default='/camera/image_raw',
+                        help='Input topic (default: /camera/image_raw)')
+    parser.add_argument('--output', default=None,
+                        help='Output topic (default: <input>/compressed)')
+    parser.add_argument('--quality', type=int, default=80,
+                        help='JPEG quality 1-100 (default: 80)')
 
     parsed_args = parser.parse_args()
-
-    # Definir tópico de saída
-    output_topic = parsed_args.output
-    if output_topic is None:
-        output_topic = parsed_args.input + '/compressed'
+    output_topic = parsed_args.output or (parsed_args.input + '/compressed')
 
     rclpy.init(args=args)
-    node = BayerCompressor(
-        input_topic=parsed_args.input,
-        output_topic=output_topic,
-        jpeg_quality=parsed_args.quality
-    )
-
+    node = BayerCompressor(parsed_args.input, output_topic, parsed_args.quality)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        print('\n🛑 Interrompido pelo usuário')
+        pass
     finally:
         node.destroy_node()
         rclpy.shutdown()

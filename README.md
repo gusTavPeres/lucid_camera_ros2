@@ -1,446 +1,270 @@
-# Lucid Vision Camera - ROS2 Humble (Docker)
+# Lucid Vision Camera — ROS2 Humble
 
-Driver das cameras Lucid Vision (Triton TRI032S) rodando dentro de um container Docker
-com ROS2 Humble. Feito pro projeto do carro autonomo, pensado desde o inicio pra escalar
-de 1 ate 8 cameras sem dor de cabeca.
+ROS2 Humble driver for Lucid Vision Triton cameras (GigE Vision), packaged as a Docker container. Supports single and multi-camera setups, JPEG-compressed streaming over LAN or VPN, bag recording, and video export.
 
-O driver oficial da Lucid so vinha preparado pro ROS2 Eloquent e nao funcionava de cara.
-Esse repositorio resolve isso e ja entrega tudo pronto pra rodar no Humble.
-
-## ✨ Novos Recursos
-
-### 📡 Streaming Multi-PC
-Transmita vídeo da câmera entre dois PCs via ROS2 (LAN ou VPN):
-- ✅ Suporte completo para Fedora Kinoite (Toolbox + ROS2 Humble)
-- ✅ Configuração automática de rede (multicast, Discovery Server, Tailscale)
-- ✅ Viewer otimizado com demosaicing de Bayer em tempo real
-- ✅ Estatísticas de FPS e banda em tempo real
-
-**➡️ [Guia Completo de Streaming](STREAMING.md)**
-
-### 🎬 Gravação e Conversão de Vídeo
-
-Dois modos de gravação disponíveis:
-
-**Gravação direta em MP4** (recomendado, sem bag):
-```bash
-python3 scripts/record_video.py --output camera.mp4          # grava indefinidamente (Ctrl+C)
-python3 scripts/record_video.py --duration 60                # grava 60 segundos
-```
-
-**Converter bag existente para MP4** (um único comando):
-```bash
-python3 scripts/convert_bag.py ./minha_bag --output video.mp4
-```
+Adapted from the [official Lucid Vision ROS2 driver](https://github.com/lucidvisionlabs/arena_camera_ros2) (originally for Eloquent) to work on ROS2 Humble with additional tooling.
 
 ---
 
-## O que voce precisa ter
+## Requirements
 
-- **Docker** e **Docker Compose** instalados no PC
-- **Camera Lucid Vision Triton** conectada via cabo Ethernet (testado com TRI032S-C)
-- **Lente C-mount** montada na camera. A camera vem sem lente, o sensor fica exposto.
-  Se so tem o tubo protetor IP67 (IPTC-D590L555), ele nao eh lente, eh so protecao.
-- **Ubuntu 22.04** ou mais novo
-- **ArenaSDK** e **arena_api** — sao os drivers da Lucid, precisa baixar do site deles:
-  https://thinklucid.com/downloads-hub/
-  - O arquivo `ArenaSDK_Linux_x64.tar.gz` vai em `resources/ArenaSDK/linux64/`
-  - O arquivo `arena_api-*.whl` vai em `resources/arena_api/`
+- **Docker** and **Docker Compose** (v2+)
+- **Lucid Vision Triton camera** connected via GigE (Ethernet)
+- **ArenaSDK** and **arena_api** — download from [Lucid downloads hub](https://thinklucid.com/downloads-hub/)
+  - `ArenaSDK_Linux_x64.tar.gz` → place in `resources/ArenaSDK/linux64/`
+  - `arena_api-*.whl` → place in `resources/arena_api/`
+- Ubuntu 22.04 or later (host OS)
 
-## Estrutura das pastas
+---
 
-```
-lucid_camera_ros2/
-├── Dockerfile                     # Receita do container (ROS2 Humble + ArenaSDK)
-├── docker-compose.yml             # Define os servicos (camera, gravador, etc)
-├── STREAMING.md                   # 📡 Guia completo de streaming multi-PC
-├── resources/
-│   ├── ArenaSDK/linux64/          # SDK da Lucid (baixar do site, nao vai pro git)
-│   └── arena_api/                 # API Python da Lucid (baixar do site)
-├── ros2_ws/src/
-│   └── arena_camera_node/         # Pacote ROS2 que fala com a camera
-├── scripts/
-│   ├── setup_network.sh           # Configura a rede do PC pras cameras GigE
-│   ├── list_cameras.py            # Mostra todas as cameras conectadas
-│   ├── start_camera.sh            # Atalho pra ligar uma camera
-│   ├── focus_helper.py            # Ajuda a focar a lente (mostra score de nitidez)
-│   ├── live_viewer.py             # Viewer Arena direto (câmera livre, sem nó ROS2)
-│   ├── live_viewer_raw.py         # Viewer Arena direto, formato Bayer RAW
-│   ├── live_viewer_ros_raw.py     # ✅ Viewer ROS2 (funciona com nó rodando)
-│   ├── record_video.py            # 🎬 Grava stream diretamente em MP4
-│   ├── convert_bag.py             # 🎬 Converte bag para MP4 (comando único)
-│   ├── bag_to_video.py            # Subscriber MP4 (usado por convert_bag.py)
-│   └── compress_bayer_stream.py   # 🗜️ Comprime stream Bayer para economizar banda
-├── launch/
-│   ├── multi_camera.launch.py     # Liga varias cameras de uma vez
-│   └── camera_streaming.launch.py # 📡 Launch otimizado para streaming
-├── config/
-│   └── cameras_example.yaml       # Modelo de config pras 8 cameras
-├── notebook_setup/                # 💻 Setup do notebook receptor (Fedora Kinoite)
-│   ├── README.md                  # Guia passo a passo
-│   ├── setup_toolbox.sh           # Instala ROS2 Humble no Toolbox
-│   ├── configure_network.sh       # Configura rede ROS2 (multicast/server/VPN)
-│   └── stream_viewer.py           # Viewer otimizado com suporte a Bayer
-└── bags/                          # Onde ficam os bags gravados
-```
-
-## Instalacao passo a passo
-
-### 1. Clonar e colocar os drivers
+## Quick Start
 
 ```bash
-git clone <url-do-repo>
-cd lucid_camera_ros2
-```
+git clone <repo-url> && cd lucid_camera_ros2
 
-Baixe o ArenaSDK do site da Lucid e coloque os arquivos nas pastas certas:
-```
-resources/ArenaSDK/linux64/ArenaSDK_Linux_x64.tar.gz
-resources/arena_api/arena_api-X.X.X-py3-none-any.whl
-```
+# 1. Place ArenaSDK and arena_api in resources/ (see Requirements above)
 
-### 2. Configurar a rede
+# 2. Configure GigE network interface (run on host, not in container)
+sudo ./scripts/setup_network.sh <gige-interface>   # e.g., enp3s0
 
-As cameras Lucid usam GigE Vision (ethernet gigabit). O PC precisa de uns ajustes
-pra aguentar o trafego de dados das cameras sem perder frames:
+# 3. Set IP on the GigE interface (link-local works out of the box)
+sudo ip addr add 169.254.1.1/16 dev <gige-interface>
 
-```bash
-chmod +x scripts/setup_network.sh
-
-# Troque "enp45s0" pela sua interface de rede se for diferente
-sudo ./scripts/setup_network.sh enp45s0
-```
-
-Se nao sabe qual eh a interface, rode `ip link show` e procure a que nao eh `lo` nem `wlo`.
-
-### 3. Configurar o IP
-
-A camera e o PC precisam estar na mesma faixa de IP. Duas opcoes:
-
-- **Link-local (mais facil):** o PC e a camera se encontram sozinhos na faixa 169.254.x.x
-  ```bash
-  sudo ip addr add 169.254.1.1/16 dev enp45s0
-  ```
-- **IP fixo:** configure um IP fixo no PC (ex: 192.168.1.1) e na camera (ex: 192.168.1.10)
-
-### 4. Liberar janelas graficas pro container
-
-Pra conseguir abrir janelas (tipo o visualizador de imagem) de dentro do container:
-```bash
+# 4. Allow graphical windows from inside the container
 xhost +local:docker
-```
 
-### 5. Montar a imagem Docker
-
-```bash
+# 5. Build and start
 docker compose build
-```
-
-Isso demora na primeira vez porque baixa o ROS2 Humble e instala tudo.
-Nas proximas vezes eh rapido porque usa cache.
-
-## Como usar
-
-### Ligar o container e entrar nele
-
-```bash
 docker compose up -d camera_dev
 docker compose exec camera_dev bash
-```
 
-Agora voce esta dentro do container. Tudo que rodar daqui pra frente eh la dentro.
-
-### Ver se a camera foi detectada
-
-```bash
-python3 /arena_camera_ros2/scripts/list_cameras.py
-```
-
-Vai mostrar modelo, serial e IP de cada camera conectada. Se nao aparecer nada,
-confira o cabo e o IP.
-
-### Ligar a camera e publicar imagens
-
-Jeito rapido (com script):
-```bash
-/arena_camera_ros2/scripts/start_camera.sh <SERIAL> /camera/image_raw
-```
-
-Jeito manual (mais controle):
-```bash
-source /opt/ros/humble/setup.bash
-source /arena_camera_ros2/ros2_ws/install/setup.bash
+# Inside the container:
+python3 /arena_camera_ros2/scripts/list_cameras.py   # verify camera is found
 ros2 run arena_camera_node start --ros-args \
-    -p serial:=<SERIAL> \
-    -p topic:=/camera/image_raw \
-    -p pixelformat:=rgb8
-```
-
-### Ver a imagem ao vivo
-
-Abra outro terminal no container e rode o viewer ROS2 (funciona com o nó da câmera rodando):
-```bash
-docker compose exec camera_dev bash
-python3 /arena_camera_ros2/scripts/live_viewer_ros_raw.py
-```
-
-Ou, se tiver ROS2 no PC host:
-```bash
-ros2 run rqt_image_view rqt_image_view /camera/image_raw
-```
-
-> **Nota:** `live_viewer.py` e `live_viewer_raw.py` usam a Arena API diretamente e só
-> funcionam quando **nenhum** nó ROS2 está usando a câmera (câmera livre).
-
-### Gravar vídeo
-
-**Opção A — Gravar direto em MP4** (recomendado, mais simples):
-```bash
-docker compose exec camera_dev bash
-source /opt/ros/humble/setup.bash && source /arena_camera_ros2/ros2_ws/install/setup.bash
-cd /arena_camera_ros2/bags
-python3 /arena_camera_ros2/scripts/record_video.py --output camera.mp4
-# Ctrl+C para parar e salvar
-```
-
-**Opção B — Gravar bag** (formato ROS2 nativo):
-```bash
-docker compose exec camera_dev bash
-source /opt/ros/humble/setup.bash
-cd /arena_camera_ros2/bags
-ros2 bag record /camera/image_raw
-# Ctrl+C para parar
-```
-
-**Converter bag para MP4** (um único comando):
-```bash
-python3 /arena_camera_ros2/scripts/convert_bag.py ./minha_bag --output video.mp4
-```
-
-Os arquivos ficam salvos na pasta `bags/` que é compartilhada com o PC host.
-
-### Checar se ta tudo rodando
-
-```bash
-# Ver quais topicos existem
-ros2 topic list
-
-# Ver a que taxa a camera ta publicando (fps)
-ros2 topic hz /camera/image_raw
-
-# Ver info do topico
-ros2 topic info /camera/image_raw --verbose
-```
-
-## Usando varias cameras (modo producao)
-
-O sistema foi feito pra escalar. Pra rodar as 8 cameras do carro:
-
-### 1. Criar o arquivo de configuracao
-
-```bash
-cp config/cameras_example.yaml config/cameras.yaml
-```
-
-### 2. Editar com os seriais das suas cameras
-
-Abra `config/cameras.yaml` e substitua os seriais. Use `list_cameras.py` pra descobrir
-o serial de cada camera. Cada camera tem um topico diferente (ex: `/camera/front/image_raw`).
-
-### 3. Ligar todas de uma vez
-
-```bash
-ros2 launch /arena_camera_ros2/launch/multi_camera.launch.py \
-    config_file:=/arena_camera_ros2/config/cameras.yaml
-```
-
-### Dicas pra 8 cameras no carro
-
-- Use um **switch gigabit** com suporte a Jumbo Frames entre as cameras e o PC
-- Configure **IPs fixos** nas cameras (ex: 192.168.1.10 ate 192.168.1.17)
-- Rode `setup_network.sh` em cada interface de rede usada
-- Se tiver problemas de banda, reduza a resolucao ou o fps no YAML
-
-## Parametros que a camera aceita
-
-| Parametro       | O que faz                                | Padrao                    |
-|-----------------|------------------------------------------|---------------------------|
-| serial          | Escolhe qual camera usar (pelo serial)   | primeira que encontrar    |
-| topic           | Nome do topico onde publica as imagens   | /arena_camera_node/images |
-| width           | Largura da imagem em pixels              | maximo da camera          |
-| height          | Altura da imagem em pixels               | maximo da camera          |
-| pixelformat     | Formato de cor (rgb8, bgr8, mono8, bayer_rggb8, etc)  | rgb8                      |
-| gain            | Ganho do sensor (brilho)                 | 0.0                       |
-| exposure_time   | Tempo de exposicao em microsegundos      | 10000                     |
-| trigger_mode    | Se true, so tira foto quando pedir       | false                     |
-| qos_reliability | Confiabilidade da comunicacao ROS        | reliable                  |
-
-## Modo RAW (BayerRG8)
-
-Para capturar imagens direto do sensor sem processamento de cor (modo RAW), use o formato `bayer_rggb8`:
-
-### Iniciar camera em modo RAW
-```bash
-# Jeito rapido (com script)
-/arena_camera_ros2/scripts/start_camera_raw.sh 243901923 /camera/image_raw
-
-# Jeito manual
-ros2 run arena_camera_node start --ros-args \
-    -p serial:=243901923 \
+    -p serial:=<YOUR_SERIAL> \
     -p topic:=/camera/image_raw \
     -p pixelformat:=bayer_rggb8
 ```
 
-### Visualizar imagem RAW
+---
 
-**Opção 1: Viewer direto da API Arena (mais rápido)**
-```bash
-python3 /arena_camera_ros2/scripts/live_viewer_raw.py
-# Pressione 'r' para alternar entre RAW e RGB
-# Pressione 's' para salvar frame (salva RAW e RGB)
+## Directory Structure
+
+```
+lucid_camera_ros2/
+├── Dockerfile                      # Container image (ROS2 Humble + ArenaSDK)
+├── docker-compose.yml              # Service definitions
+├── config/
+│   ├── setup_fastdds.sh            # Generates FastDDS profiles for your network
+│   ├── fastdds_publisher.xml.example
+│   ├── fastdds_subscriber.xml.example
+│   └── cameras_example.yaml        # Multi-camera config template
+├── scripts/
+│   ├── setup_network.sh            # GigE interface tuning (MTU, buffers, ring)
+│   ├── list_cameras.py             # Detect connected cameras (model, serial, IP)
+│   ├── start_camera.sh             # Camera node launcher with parameter support
+│   ├── compress_bayer_stream.py    # JPEG compression relay (for streaming)
+│   ├── receive_frames.py           # Headless frame receiver (no display needed)
+│   ├── focus_helper.py             # Live focus score for lens adjustment
+│   ├── live_viewer_ros_raw.py      # OpenCV viewer via ROS2 topic
+│   ├── record_video.py             # Direct MP4 recording from camera topic
+│   ├── bag_to_video.py             # Convert ROS2 bag to MP4
+│   └── convert_bag.py              # One-command bag-to-video wrapper
+├── notebook_setup/                 # Publisher-side tools (camera machine)
+│   ├── setup_toolbox.sh            # ROS2 Humble container setup (toolbox/distrobox)
+│   ├── compress_stream.sh          # Start compression relay for streaming
+│   ├── throttle_camera.sh          # FPS limiter (simpler alternative to compression)
+│   ├── setup_firewall_receiver.sh  # Accept ROS2 UDP traffic from LAN/VPN subnet
+│   └── stream_viewer.py            # OpenCV viewer for remote viewing
+├── launch/
+│   ├── multi_camera.launch.py      # Launch multiple cameras from YAML config
+│   └── camera_streaming.launch.py  # Streaming-optimized launch
+└── ros2_ws/src/
+    └── arena_camera_node/          # ROS2 package (C++ node wrapping ArenaSDK)
 ```
 
-**Opção 2: Viewer ROS2 (subscreve no tópico)**
-```bash
-python3 /arena_camera_ros2/scripts/live_viewer_ros_raw.py
-# Pressione 'r' para alternar entre RAW e RGB
-# Pressione 's' para salvar frame
-```
+---
 
-**Opção 3: rqt_image_view**
-```bash
-ros2 run rqt_image_view rqt_image_view /camera/image_raw
-# O rqt automaticamente faz o demosaicing do Bayer para visualização
-```
+## Camera Node Parameters
 
-### Formatos Bayer suportados
+| Parameter       | Description                                         | Default                 |
+|-----------------|-----------------------------------------------------|-------------------------|
+| `serial`        | Camera serial number (integer)                      | first available         |
+| `topic`         | ROS2 topic name                                     | `/arena_camera_node/images` |
+| `pixelformat`   | `bayer_rggb8`, `rgb8`, `bgr8`, `mono8`, etc.       | `rgb8`                  |
+| `width`         | Image width in pixels                               | camera maximum          |
+| `height`        | Image height in pixels                              | camera maximum          |
+| `gain`          | Sensor gain in dB                                   | `0.0`                   |
+| `exposure_time` | Exposure in microseconds                            | camera default          |
+| `trigger_mode`  | `true` = triggered, `false` = continuous            | `false`                 |
+| `qos_reliability` | `reliable` or `best_effort`                       | `reliable`              |
 
-A câmera Triton TRI032S usa um sensor com filtro Bayer **RGGB**. Formatos disponíveis:
-- `bayer_rggb8` - 8 bits, padrão Red-Green-Green-Blue (BayerRG8)
-- `bayer_rggb16` - 16 bits, padrão RGGB
-- `bayer_bggr8`, `bayer_gbrg8`, `bayer_grbg8` - outros padrões Bayer
+**Note:** `pixelformat` and `gain`/`exposure_time` are startup-only parameters and cannot be changed at runtime without restarting the node.
 
-**Importante**: A câmera TRI032S usa BayerRG8 nativamente. Use `bayer_rggb8` para obter dados RAW sem conversão.
-
-### Conversão Bayer para RGB
-
-Para processar imagens Bayer, use OpenCV:
+**Bayer RAW:** Triton cameras use BayerRG8 natively. Use `pixelformat:=bayer_rggb8` for zero-copy RAW data. When processing in OpenCV:
 ```python
-import cv2
-raw_img = cv2.imread('frame_raw.png', cv2.IMREAD_GRAYSCALE)
-# ROS2 bayer_rggb8 → OpenCV usa BayerBG (nomenclatura invertida)
-bgr_img = cv2.cvtColor(raw_img, cv2.COLOR_BayerBG2BGR)
+# ROS2 bayer_rggb8 maps to OpenCV BayerBG (naming is inverted)
+bgr = cv2.cvtColor(raw_img, cv2.COLOR_BayerBG2BGR)
 ```
 
-Ou use o pacote ROS2 `image_proc` para fazer demosaicing em tempo real:
+---
+
+## Multi-machine Streaming
+
+Stream camera images from the camera machine to a remote receiver over LAN or VPN.
+
+### Why FastDDS profiles are needed
+
+When a machine has multiple network interfaces (e.g., GigE camera port + WiFi), FastDDS advertises all interface IPs as data locators. The remote subscriber may then try to send data to the GigE camera IP (169.254.x.x), which is not reachable. FastDDS unicast profiles restrict which IP is advertised.
+
+### Setup
+
+**On the camera machine** (publisher):
 ```bash
-ros2 run image_proc debayer --ros-args \
-    -r image_raw:=/camera/image_raw \
-    -r image_color:=/camera/image_color
+# Generate FastDDS profile for the streaming interface
+./config/setup_fastdds.sh publisher <streaming-interface>
+# Example: ./config/setup_fastdds.sh publisher wlan0
+
+# Start camera node (script sets the profile automatically)
+./scripts/start_camera.sh <serial> /camera/image_raw bayer_rggb8
+
+# Start compression relay (in another terminal)
+bash ./notebook_setup/compress_stream.sh /camera/image_raw
 ```
 
-## Problemas comuns
-
-### Camera nao aparece
-
-1. Confira se o cabo ethernet ta conectado e a camera ta ligada
-2. Rode `sudo ./scripts/setup_network.sh <interface>` no PC host
-3. Confira se o IP do PC e da camera estao na mesma faixa
-4. Tente pingar a camera: `ping 169.254.x.x`
-
-### Imagem toda cinza / borrada / sem forma nenhuma
-
-A camera Triton **nao vem com lente**. Sem lente, o sensor recebe luz difusa e a
-imagem fica uniformemente cinza. O tubo IP67 (IPTC-D590L555) eh so protecao, nao
-eh lente.
-
-Monte uma **lente C-mount** e depois ajuste o foco:
+**On the receiver machine** (Docker):
 ```bash
-python3 /arena_camera_ros2/scripts/focus_helper.py
-# Gire o anel de foco ate o SHARPNESS na tela ser o mais alto possivel
-```
+# Generate FastDDS profile for the receiving interface
+./config/setup_fastdds.sh subscriber <receiving-interface>
+# Example: ./config/setup_fastdds.sh subscriber eth0
 
-### Janela grafica nao abre
+# Allow firewall traffic (if needed)
+sudo bash ./notebook_setup/setup_firewall_receiver.sh 192.168.X.0/24
 
-Rode no PC host (fora do container):
-```bash
+# Start container and viewer
 xhost +local:docker
-```
-
-### Imagem com lag ou travando
-
-- Aumente os buffers de rede (`setup_network.sh` ja faz isso)
-- Ative Jumbo Frames (MTU 9000) no switch e na interface
-- Reduza a resolucao ou o fps
-- Se for muitas cameras, distribua entre interfaces de rede diferentes
-
-### Erro de compilacao: `True not declared`
-
-O codigo original tinha `True` (que eh Python) em vez de `true` (que eh C++).
-Ja ta corrigido nesse repositorio.
-
-### Erro de OpenCV na compilacao
-
-O ArenaSDK vem com o OpenCV dele (4.0.1) e o linker precisa achar essas libs.
-O `Findarena_sdk.cmake` desse repositorio ja ta configurado pra isso.
-Se der problema, confira se o `LD_LIBRARY_PATH` inclui `/ArenaSDK_Linux_x64/OpenCV/lib`.
-
-## Comandos uteis (cola rapida)
-
-```bash
-# Subir o container
 docker compose up -d camera_dev
-
-# Entrar no container
 docker compose exec camera_dev bash
 
-# Ver logs do container
-docker compose logs -f
-
-# Parar tudo
-docker compose down
-
-# Rebuildar do zero (se mudou o Dockerfile)
-docker compose build --no-cache
+# Inside container:
+source /opt/ros/humble/setup.bash
+python3 /arena_camera_ros2/notebook_setup/stream_viewer.py \
+    --topic /camera/image_raw --compressed
 ```
 
-## O que foi mudado em relacao ao driver oficial
+### Bandwidth comparison
 
-Esse projeto parte do [arena_camera_ros2](https://github.com/lucidvisionlabs/arena_camera_ros2)
-da Lucid Vision Labs. O original era pro ROS2 Eloquent e nao compilava no Humble.
-Mudancas feitas:
+| Method              | Resolution  | Rate    | Bandwidth    |
+|---------------------|-------------|---------|--------------|
+| RAW throttled       | 1024×768    | 15 FPS  | ~12 Mbps     |
+| JPEG compressed q=80| 2048×1536   | 30 FPS  | ~8-15 Mbps   |
+| RAW full            | 2048×1536   | 35 FPS  | ~175 Mbps    |
 
-1. **Dockerfile refeito** pro ROS2 Humble (o original era Eloquent)
-2. **Instalacao do ArenaSDK** feita direto via `Arena_SDK.conf` (sem script interativo)
-3. **OpenCV do SDK linkado** no `Findarena_sdk.cmake` (resolvia erro de undefined reference)
-4. **Bug `True`/`true`** corrigido no `ArenaCameraNode.cpp`
-5. **Coisas novas**: scripts auxiliares, launch file multi-camera, config YAML, focus helper
-6. **Streaming multi-PC**: suporte completo para transmissão ROS2 entre PCs (LAN/VPN)
-7. **Bag to video**: conversão otimizada de bags para MP4 com suporte a Bayer RAW
+JPEG compression is the recommended approach for streaming: it delivers full resolution at full frame rate within WiFi bandwidth.
 
-## 📚 Guias e Documentação
+### Streaming over VPN (WireGuard)
 
-- 📘 **[README Principal](README.md)** - Setup básico da câmera (você está aqui)
-- 📡 **[STREAMING.md](STREAMING.md)** - Guia completo de streaming multi-PC
-- 💻 **[notebook_setup/README.md](notebook_setup/README.md)** - Setup do notebook receptor (Fedora Kinoite)
-- 🎬 **bag_to_video.py** - Ver [STREAMING.md](STREAMING.md#gravação-de-bags-e-conversão-para-vídeo)
+Multicast discovery does not work over WireGuard. Use FastDDS `initialPeersList` to specify the remote peer's VPN IP:
 
-## 🚀 Links Rápidos
+```xml
+<!-- Add inside <rtps> in your fastdds_publisher.xml -->
+<initialPeersList>
+  <locator>
+    <udpv4>
+      <address>10.X.X.X</address>  <!-- remote peer VPN IP -->
+      <port>11811</port>
+    </udpv4>
+  </locator>
+</initialPeersList>
+```
 
-### Primeira vez usando?
-1. [Instalação passo a passo](#instalacao-passo-a-passo)
-2. [Como usar](#como-usar)
-3. [Modo RAW (BayerRG8)](#modo-raw-bayerrg8)
+---
 
-### Já tem a câmera funcionando?
-- 📡 [Configurar streaming entre PCs](STREAMING.md)
-- 🎬 [Converter bags para vídeo](STREAMING.md#gravação-de-bags-e-conversão-para-vídeo)
-- 🔧 [Problemas comuns](#problemas-comuns)
+## Multiple Cameras
 
-### Setup do notebook receptor
-- 💻 [Guia completo Fedora Kinoite](notebook_setup/README.md)
-- 🌐 [Configurar rede ROS2](STREAMING.md#configuração-de-rede)
+Scale to multiple cameras using a YAML configuration:
 
-## Licenca
+```bash
+cp config/cameras_example.yaml config/cameras.yaml
+# Edit cameras.yaml with your camera serials and topics
 
-MIT - Baseado no driver oficial da Lucid Vision Labs.
+ros2 launch /arena_camera_ros2/launch/multi_camera.launch.py \
+    config_file:=/arena_camera_ros2/config/cameras.yaml
+```
+
+For production deployments with many cameras:
+- Use a **gigabit switch** with Jumbo Frame support between cameras and the host
+- Configure **static IPs** on each camera
+- Run `setup_network.sh` on each GigE interface
+
+---
+
+## Recording
+
+**Direct MP4** (recommended):
+```bash
+python3 /arena_camera_ros2/scripts/record_video.py --output camera.mp4
+# Ctrl+C to stop and finalize
+```
+
+**ROS2 bag** (lossless, for post-processing):
+```bash
+cd /arena_camera_ros2/bags
+ros2 bag record /camera/image_raw -s mcap
+```
+
+**Convert bag to MP4:**
+```bash
+python3 /arena_camera_ros2/scripts/convert_bag.py ./my_bag --output video.mp4
+```
+
+---
+
+## Troubleshooting
+
+**Camera not detected:**
+- Check Ethernet cable and camera power
+- Run `sudo ./scripts/setup_network.sh <interface>` on the host
+- Verify the host IP is on the same subnet as the camera: `ip addr show`
+- Try: `ping <camera-ip>`
+
+**Image is grey or out of focus:**
+- Triton cameras ship without a lens — a C-mount lens must be installed separately
+- Adjust focus using: `python3 /arena_camera_ros2/scripts/focus_helper.py`
+
+**No graphical window:**
+- Run `xhost +local:docker` on the host before starting the container
+
+**Streaming: topic visible but 0 frames received:**
+- The most common cause is FastDDS advertising the wrong interface IP
+- Run `setup_fastdds.sh` on both machines with the correct interface
+- Confirm with `tcpdump -i any udp port 7400` that packets are on the right interface
+- Ensure the subscriber FastDDS profile uses the IP where packets physically arrive
+  (check with `tcpdump` — it may differ from the default route interface)
+
+**Compile error: `True not declared`:**
+- Fixed in this repository (the upstream driver had Python `True` in C++ code)
+
+**OpenCV link error during build:**
+- The ArenaSDK ships its own OpenCV. The `Findarena_sdk.cmake` in this repo handles
+  this automatically via `LD_LIBRARY_PATH` and explicit lib paths.
+
+---
+
+## Changes from the Official Driver
+
+The upstream [arena_camera_ros2](https://github.com/lucidvisionlabs/arena_camera_ros2) targeted ROS2 Eloquent. Changes in this fork:
+
+1. **Dockerfile** rebuilt for ROS2 Humble
+2. **ArenaSDK installation** via `Arena_SDK.conf` (non-interactive)
+3. **OpenCV linking** fixed in `Findarena_sdk.cmake`
+4. **Bug fix**: `True` → `true` in `ArenaCameraNode.cpp`
+5. **Added**: multi-machine streaming with FastDDS unicast profiles
+6. **Added**: JPEG compression relay for bandwidth-efficient streaming
+7. **Added**: multi-camera launch, YAML config, focus helper, video recording/conversion
+
+---
+
+## License
+
+MIT — based on the official Lucid Vision Labs driver.

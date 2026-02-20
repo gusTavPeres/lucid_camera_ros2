@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!-- FastDDS unicast profile for the publisher (camera machine).
+     Copy to fastdds_publisher.xml and replace YOUR.PUBLISHER.IP with the
+     IP of the network interface used for streaming (e.g., WiFi or LAN).
+     Or generate automatically: ./config/setup_fastdds.sh publisher <interface>
+
+     This profile restricts FastDDS to announce only the specified interface,
+     preventing other interfaces (e.g., GigE camera port at 169.254.x.x)
+     from being advertised as data locators to subscribers.
+     Multicast discovery (239.255.0.1) is preserved (no <builtin> block).
+-->
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <participant profile_name="default_participant" is_default_profile="true">
+    <rtps>
+      <defaultUnicastLocatorList>
+        <locator>
+          <udpv4>
+            <address>YOUR.PUBLISHER.IP</address>
+            <port>0</port>
+          </udpv4>
+        </locator>
+      </defaultUnicastLocatorList>
+    </rtps>
+  </participant>
+</profiles>
