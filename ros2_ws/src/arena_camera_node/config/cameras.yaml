@@ -1,0 +1,60 @@
+# Configuração unificada do pipeline:
+# - câmera (ArenaCameraNode)
+# - resize + compressão padrão ROS2 (ImageResizerNode + image_transport)
+#
+# Seriais: configurados no .env (CAMERA_1_SERIAL, CAMERA_2_SERIAL, etc).
+# O .env tem precedência; valores abaixo são fallback.
+# Para descobrir seriais: python3 /arena_camera_ros2/scripts/list_cameras.py
+#
+# Dica TRI032S-C:
+# DeviceLinkThroughputLimit não é gravável nesse modelo.
+cameras:
+  - name: camera_1
+    topic: /camera_1/image_raw
+    pixelformat: rgb8
+    exposure_auto: true
+    exposure_time: 20000.0
+    gain: 0.0
+    frame_rate: 5.0
+    frame_id: camera_1_optical_frame
+    qos_reliability: reliable
+    trigger_mode: false
+
+    resizer:
+      enabled: true
+      name: camera_1_resizer
+      output_topic: /camera_1/image_new
+      output_width: 960
+      output_height: 540
+      interpolation: area
+      qos_reliability: best_effort
+      compression:
+        format: jpeg
+        jpeg_quality: 10
+        jpeg_compress_bayer: false
+        png_level: 3
+
+  - name: camera_2
+    topic: /camera_2/image_raw
+    pixelformat: rgb8
+    exposure_auto: true
+    exposure_time: 20000.0
+    gain: 0.0
+    frame_rate: 5.0
+    frame_id: camera_2_optical_frame
+    qos_reliability: reliable
+    trigger_mode: false
+
+    resizer:
+      enabled: true
+      name: camera_2_resizer
+      output_topic: /camera_2/image_new
+      output_width: 960
+      output_height: 540
+      interpolation: area
+      qos_reliability: best_effort
+      compression:
+        format: jpeg
+        jpeg_quality: 10
+        jpeg_compress_bayer: false
+        png_level: 3

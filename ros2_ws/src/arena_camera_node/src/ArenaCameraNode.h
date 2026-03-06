@@ -56,21 +56,20 @@ class ArenaCameraNode : public rclcpp::Node
   bool is_passed_serial_;
 
   std::string topic_;
-
-  size_t width_;
-  bool is_passed_width;
-
-  size_t height_;
-  bool is_passed_height;
+  std::string frame_id_;
 
   double gain_;
   bool is_passed_gain_;
 
   double exposure_time_;
   bool is_passed_exposure_time_;
+  bool exposure_auto_;
 
   double frame_rate_;
   bool is_passed_frame_rate_;
+
+  int64_t device_link_throughput_limit_;
+  bool is_passed_device_link_throughput_limit_;
 
   std::string pixelformat_pfnc_;
   std::string pixelformat_ros_;
@@ -98,12 +97,13 @@ class ArenaCameraNode : public rclcpp::Node
   Arena::IDevice* create_device_ros_();
   void set_nodes_();
   void set_nodes_load_default_profile_();
-  void set_nodes_roi_();
+  void set_nodes_full_sensor_();
   void set_nodes_gain_();
   void set_nodes_frame_rate_();
   void set_nodes_pixelformat_();
   void set_nodes_exposure_();
   void set_nodes_trigger_mode_();
+  void set_nodes_throughput_();
   void set_nodes_test_pattern_image_();
   void publish_images_();
 

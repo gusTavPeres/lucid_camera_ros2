@@ -43,7 +43,9 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 # - for pakages used in #includes
 # - even if a dependency is used in one package, it has to be found
 find_package(ament_cmake REQUIRED)
+find_package(OpenCV REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(image_transport REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -77,11 +79,19 @@ find_package(arena_sdk REQUIRED)
 # LAUNCH FILES
 # -------------
 
-# install launch files.
-#install(
-#  DIRECTORY launch
-#  DESTINATION share/${PROJECT_NAME}/
-# )
+install(
+  DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}/
+)
+
+# ------
+# CONFIG
+# ------
+
+install(
+  DIRECTORY config
+  DESTINATION share/${PROJECT_NAME}/
+)
 
 # --------
 # HEADERS
@@ -138,8 +148,8 @@ add_executable(${target_name}
 # ROS DEP
 # - this way, it will find our header libs automatically
 # - for Arenasdk the cmake way is used no ament
-ament_target_dependencies(${target_name}  rclcpp 
-                                          std_msgs 
+ament_target_dependencies(${target_name}  rclcpp
+                                          std_msgs
                                           std_srvs
                                           sensor_msgs
                                           arena_sdk
@@ -150,6 +160,32 @@ ament_target_dependencies(${target_name}  rclcpp
 install(TARGETS
   ${target_name} 
     DESTINATION lib/${PROJECT_NAME}
+)
+
+# -----------------------------------------------------------------------------
+#
+# ROS2 RUN IMAGE_RESIZER <>
+#
+# -----------------------------------------------------------------------------
+
+set(image_resizer image_resizer)
+
+add_executable(${image_resizer}
+  src/image_resizer_main.cpp
+  src/ImageResizerNode.cpp
+)
+
+ament_target_dependencies(${image_resizer}
+  rclcpp
+  image_transport
+  sensor_msgs
+)
+target_include_directories(${image_resizer} PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(${image_resizer} ${OpenCV_LIBS})
+
+install(TARGETS
+  ${image_resizer}
+  DESTINATION lib/${PROJECT_NAME}
 )
 
 # -----------------------------------------------------------------------------

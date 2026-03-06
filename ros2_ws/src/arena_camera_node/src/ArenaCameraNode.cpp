@@ -16,27 +16,12 @@ void ArenaCameraNode::parse_parameters_()
   std::string nextParameterToDeclare = "";
   try {
     nextParameterToDeclare = "serial";
-    if (this->has_parameter("serial")) {
-        int serial_integer;
-        this->get_parameter<int>("serial", serial_integer);
-        serial_ = std::to_string(serial_integer);
-        is_passed_serial_ = true;
-} else {
-    serial_ = ""; // Set it to an empty string to indicate it's not passed.
-    is_passed_serial_ = false;
-}
+    serial_ = this->declare_parameter("serial", std::string(""));
+    is_passed_serial_ = !serial_.empty();
     
     nextParameterToDeclare = "pixelformat";
     pixelformat_ros_ = this->declare_parameter("pixelformat", "");
     is_passed_pixelformat_ros_ = pixelformat_ros_ != "";
-
-    nextParameterToDeclare = "width";
-    width_ = this->declare_parameter("width", 0);
-    is_passed_width = width_ > 0;
-
-    nextParameterToDeclare = "height";
-    height_ = this->declare_parameter("height", 0);
-    is_passed_height = height_ > 0;
 
     nextParameterToDeclare = "gain";
     gain_ = this->declare_parameter("gain", -1.0);
@@ -46,18 +31,28 @@ void ArenaCameraNode::parse_parameters_()
     exposure_time_ = this->declare_parameter("exposure_time", -1.0);
     is_passed_exposure_time_ = exposure_time_ >= 0;
 
+    nextParameterToDeclare = "exposure_auto";
+    exposure_auto_ = this->declare_parameter("exposure_auto", true);
+
     nextParameterToDeclare = "frame_rate";
     frame_rate_ = this->declare_parameter("frame_rate", -1.0);
     is_passed_frame_rate_ = frame_rate_ > 0;
 
+    nextParameterToDeclare = "device_link_throughput_limit";
+    device_link_throughput_limit_ =
+        this->declare_parameter("device_link_throughput_limit", int64_t(0));
+    is_passed_device_link_throughput_limit_ = device_link_throughput_limit_ > 0;
+
     nextParameterToDeclare = "trigger_mode";
     trigger_mode_activated_ = this->declare_parameter("trigger_mode", false);
-    // no need to is_passed_trigger_mode_ because it is already a boolean
 
     nextParameterToDeclare = "topic";
-    topic_ = this->declare_parameter(
-        "topic", std::string("/") + this->get_name() + "/images");
+    topic_ = this->declare_parameter("topic", std::string("/camera/image_raw"));
     // no need to is_passed_topic_
+
+    nextParameterToDeclare = "frame_id";
+    frame_id_ =
+        this->declare_parameter("frame_id", std::string("camera_optical_frame"));
 
     nextParameterToDeclare = "qos_history";
     pub_qos_history_ = this->declare_parameter("qos_history", "");
@@ -68,7 +63,7 @@ void ArenaCameraNode::parse_parameters_()
     is_passed_pub_qos_history_depth_ = pub_qos_history_depth_ > 0;
 
     nextParameterToDeclare = "qos_reliability";
-    pub_qos_reliability_ = this->declare_parameter("qos_reliability", "");
+    pub_qos_reliability_ = this->declare_parameter("qos_reliability", "reliable");
     is_passed_pub_qos_reliability_ = pub_qos_reliability_ != "";
 
   } catch (rclcpp::ParameterTypeException& e) {
@@ -245,10 +240,10 @@ void ArenaCameraNode::publish_images_()
       pImage = m_pDevice->GetImage(1000);
       msg_form_image_(pImage, *p_image_msg);
 
-      m_pub_->publish(std::move(p_image_msg));
+      m_pub_->publish(*p_image_msg);
 
-      log_info(std::string("image ") + std::to_string(pImage->GetFrameId()) +
-               " published to " + topic_);
+      // log_info(std::string("image ") + std::to_string(pImage->GetFrameId()) +
+      //          " published to " + topic_);
       this->m_pDevice->RequeueBuffer(pImage);
 
     } catch (std::exception& e) {
@@ -274,17 +269,15 @@ void ArenaCameraNode::msg_form_image_(Arena::IImage* pImage,
         static_cast<uint32_t>(pImage->GetTimestampNs() / 1000000000);
     image_msg.header.stamp.nanosec =
         static_cast<uint32_t>(pImage->GetTimestampNs() % 1000000000);
-    image_msg.header.frame_id = std::to_string(pImage->GetFrameId());
+    image_msg.header.frame_id = frame_id_;
 
     //
-    // 2 ) Height
+    // 2 ) Height, 3) Width - use actual image dimensions from camera (raw, no cropping)
     //
-    image_msg.height = height_;
-
-    //
-    // 3 ) Width
-    //
-    image_msg.width = width_;
+    const auto img_width = static_cast<uint32_t>(pImage->GetWidth());
+    const auto img_height = static_cast<uint32_t>(pImage->GetHeight());
+    image_msg.width = img_width;
+    image_msg.height = img_height;
 
     //
     // 4 ) encoding
@@ -309,9 +302,9 @@ void ArenaCameraNode::msg_form_image_(Arena::IImage* pImage,
     //
     // 7) data
     //
-    auto image_data_length_in_bytes = width_length_in_bytes * height_;
+    auto image_data_length_in_bytes =
+        static_cast<size_t>(width_length_in_bytes) * img_height;
     image_msg.data.resize(image_data_length_in_bytes);
-    auto x = pImage->GetData();
     std::memcpy(&image_msg.data[0], pImage->GetData(),
                 image_data_length_in_bytes);
 
@@ -364,7 +357,7 @@ void ArenaCameraNode::publish_an_image_on_trigger_(
     auto msg = std::string("image ") + std::to_string(pImage->GetFrameId()) +
                " published to " + topic_;
     msg_form_image_(pImage, *p_image_msg);
-    m_pub_->publish(std::move(p_image_msg));
+    m_pub_->publish(*p_image_msg);
     response->message = msg;
     response->success = true;
 
@@ -424,13 +417,13 @@ Arena::IDevice* ArenaCameraNode::create_device_ros_()
 void ArenaCameraNode::set_nodes_()
 {
   set_nodes_load_default_profile_();
-  set_nodes_roi_();
+  set_nodes_full_sensor_();
   set_nodes_gain_();
   set_nodes_frame_rate_();
   set_nodes_pixelformat_();
   set_nodes_exposure_();
   set_nodes_trigger_mode_();
-  // configure Auto Negotiate Packet Size and Packet Resend
+  set_nodes_throughput_();
   Arena::SetNodeValue<bool>(m_pDevice->GetTLStreamNodeMap(), "StreamAutoNegotiatePacketSize", true);
   Arena::SetNodeValue<bool>(m_pDevice->GetTLStreamNodeMap(), "StreamPacketResendEnable", true);
 
@@ -448,27 +441,22 @@ void ArenaCameraNode::set_nodes_load_default_profile_()
   log_info("\tdefault profile is loaded");
 }
 
-void ArenaCameraNode::set_nodes_roi_()
+void ArenaCameraNode::set_nodes_full_sensor_()
 {
   auto nodemap = m_pDevice->GetNodeMap();
-
-  // Width -------------------------------------------------
-  if (is_passed_width) {
-    Arena::SetNodeValue<int64_t>(nodemap, "Width", width_);
-  } else {
-    width_ = Arena::GetNodeValue<int64_t>(nodemap, "Width");
+  // Use full sensor resolution (no cropping); cropping will be done in another node.
+  try {
+    Arena::SetNodeValue<int64_t>(nodemap, "OffsetX", 0);
+    Arena::SetNodeValue<int64_t>(nodemap, "OffsetY", 0);
+    const auto max_width = Arena::GetNodeValue<int64_t>(nodemap, "WidthMax");
+    const auto max_height = Arena::GetNodeValue<int64_t>(nodemap, "HeightMax");
+    Arena::SetNodeValue<int64_t>(nodemap, "Width", max_width);
+    Arena::SetNodeValue<int64_t>(nodemap, "Height", max_height);
+    log_info(std::string("\tFull sensor: ") + std::to_string(max_width) + "x" +
+             std::to_string(max_height));
+  } catch (std::exception& e) {
+    log_warn(std::string("\tCould not set full sensor ROI: ") + e.what());
   }
-
-  // Height ------------------------------------------------
-  if (is_passed_height) {
-    Arena::SetNodeValue<int64_t>(nodemap, "Height", height_);
-  } else {
-    height_ = Arena::GetNodeValue<int64_t>(nodemap, "Height");
-  }
-
-  // TODO only if it was passed by ros arg
-  log_info(std::string("\tROI set to ") + std::to_string(width_) + "X" +
-           std::to_string(height_));
 }
 
 void ArenaCameraNode::set_nodes_gain_()
@@ -531,10 +519,16 @@ void ArenaCameraNode::set_nodes_pixelformat_()
 
 void ArenaCameraNode::set_nodes_exposure_()
 {
-  if (is_passed_exposure_time_) {
-    auto nodemap = m_pDevice->GetNodeMap();
+  auto nodemap = m_pDevice->GetNodeMap();
+  if (!exposure_auto_) {
+    double time_us = is_passed_exposure_time_ ? exposure_time_ : 10000.0;
     Arena::SetNodeValue<GenICam::gcstring>(nodemap, "ExposureAuto", "Off");
-    Arena::SetNodeValue<double>(nodemap, "ExposureTime", exposure_time_);
+    Arena::SetNodeValue<double>(nodemap, "ExposureTime", time_us);
+    log_info(std::string("\tExposureAuto set to Off, ExposureTime set to ") +
+             std::to_string(time_us));
+  } else {
+    Arena::SetNodeValue<GenICam::gcstring>(nodemap, "ExposureAuto", "Continuous");
+    log_info("\tExposureAuto set to Continuous");
   }
 }
 
@@ -572,6 +566,22 @@ void ArenaCameraNode::set_nodes_trigger_mode_()
   // the user default profile
   else {
     Arena::SetNodeValue<GenICam::gcstring>(nodemap, "TriggerMode", "Off");
+  }
+}
+
+void ArenaCameraNode::set_nodes_throughput_()
+{
+  if (is_passed_device_link_throughput_limit_) {
+    try {
+      auto nodemap = m_pDevice->GetNodeMap();
+      Arena::SetNodeValue<int64_t>(nodemap, "DeviceLinkThroughputLimit",
+                                   device_link_throughput_limit_);
+      log_info(std::string("\tDeviceLinkThroughputLimit set to ") +
+               std::to_string(device_link_throughput_limit_) + " Bps");
+    } catch (GenICam::GenericException& e) {
+      log_warn(std::string("\tCould not set DeviceLinkThroughputLimit: ") +
+               e.what());
+    }
   }
 }
 

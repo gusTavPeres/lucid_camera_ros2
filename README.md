@@ -24,27 +24,44 @@ git clone <repo-url> && cd lucid_camera_ros2
 
 # 1. Place ArenaSDK and arena_api in resources/ (see Requirements above)
 
-# 2. Configure GigE network interface (run on host, not in container)
+# 2. Configure .env (ARENASDK paths, CAMERA_1_SERIAL, CAMERA_2_SERIAL, ROS_DOMAIN_ID)
+# 3. Edit cameras.yaml para outras opções (resize, compressão); serials vêm do .env
+
+# 4. Configure GigE network interface (run on host, not in container)
 sudo ./scripts/setup_network.sh <gige-interface>   # e.g., enp3s0
 
-# 3. Set IP on the GigE interface (link-local works out of the box)
+# 5. Set IP on the GigE interface (link-local works out of the box)
 sudo ip addr add 169.254.1.1/16 dev <gige-interface>
 
-# 4. Allow graphical windows from inside the container
+# 6. Allow graphical windows from inside the container
 xhost +local:docker
 
-# 5. Build and start
+# 7. Build and start
 docker compose build
 docker compose up -d camera_dev
-docker compose exec camera_dev bash
 
-# Inside the container:
+# The container automatically runs the unified pipeline (cameras + resize + compression)
+# from ros2_ws/src/arena_camera_node/config/cameras.yaml
+
+# Optional: run a single camera manually (inside container)
+docker compose exec camera_dev bash
 python3 /arena_camera_ros2/scripts/list_cameras.py   # verify camera is found
 ros2 run arena_camera_node start --ros-args \
     -p serial:=<YOUR_SERIAL> \
     -p topic:=/camera/image_raw \
-    -p pixelformat:=bayer_rggb8
+    -p pixelformat:=rgb8
 ```
+
+---
+
+## .env Configuration
+
+`docker-compose.yml` now reads all build/runtime variables from `.env`.
+
+Key variables:
+- `ARENASDK_ROOT_ON_HOST` and `ARENA_API_ROOT_ON_HOST`: input files used at image build time.
+- `FASTRTPS_DEFAULT_PROFILES_FILE`: DDS interface restriction profile used in container runtime.
+- `CAMERA_1_SERIAL`, `CAMERA_2_SERIAL`, …: serials das câmeras (override do `cameras.yaml`). Edite aqui para trocar câmeras sem recompilar.
 
 ---
 
@@ -52,17 +69,16 @@ ros2 run arena_camera_node start --ros-args \
 
 ```
 lucid_camera_ros2/
+├── .env                            # Build/runtime variables used by docker compose
 ├── Dockerfile                      # Container image (ROS2 Humble + ArenaSDK)
 ├── docker-compose.yml              # Service definitions
 ├── config/
 │   ├── setup_fastdds.sh            # Generates FastDDS profiles for your network
 │   ├── fastdds_publisher.xml.example
-│   ├── fastdds_subscriber.xml.example
-│   └── cameras_example.yaml        # Multi-camera config template
+│   └── fastdds_subscriber.xml.example
 ├── scripts/
 │   ├── setup_network.sh            # GigE interface tuning (MTU, buffers, ring)
 │   ├── list_cameras.py             # Detect connected cameras (model, serial, IP)
-│   ├── start_camera.sh             # Camera node launcher with parameter support
 │   ├── compress_bayer_stream.py    # JPEG compression relay (for streaming)
 │   ├── receive_frames.py           # Headless frame receiver (no display needed)
 │   ├── focus_helper.py             # Live focus score for lens adjustment
@@ -76,33 +92,39 @@ lucid_camera_ros2/
 │   ├── throttle_camera.sh          # FPS limiter (simpler alternative to compression)
 │   ├── setup_firewall_receiver.sh  # Accept ROS2 UDP traffic from LAN/VPN subnet
 │   └── stream_viewer.py            # OpenCV viewer for remote viewing
-├── launch/
-│   ├── multi_camera.launch.py      # Launch multiple cameras from YAML config
-│   └── camera_streaming.launch.py  # Streaming-optimized launch
 └── ros2_ws/src/
     └── arena_camera_node/          # ROS2 package (C++ node wrapping ArenaSDK)
+        ├── launch/
+        │   └── camera_pipeline.launch.py   # Unified pipeline (camera + resize + compression)
+        └── config/
+            └── cameras.yaml       # Unified config: cameras + resizer + compression
 ```
 
 ---
 
 ## Camera Node Parameters
 
-| Parameter         | Description                                       | Default                 |
-|-------------------|---------------------------------------------------|-------------------------|
-| `serial`          | Camera serial number (integer)                    | first available         |
-| `topic`           | ROS2 topic name                                   | `/arena_camera_node/images` |
-| `pixelformat`     | `bayer_rggb8`, `rgb8`, `bgr8`, `mono8`, etc.     | `rgb8`                  |
-| `width`           | Image width in pixels                             | camera maximum          |
-| `height`          | Image height in pixels                            | camera maximum          |
-| `gain`            | Sensor gain in dB                                 | `0.0`                   |
-| `exposure_time`   | Exposure in microseconds                          | camera default          |
-| `frame_rate`      | Target acquisition frame rate in FPS              | camera default          |
-| `trigger_mode`    | `true` = triggered, `false` = continuous          | `false`                 |
-| `qos_reliability` | `reliable` or `best_effort`                       | `reliable`              |
+| Parameter            | Description                                       | Default                 |
+|----------------------|---------------------------------------------------|-------------------------|
+| `serial`             | Camera serial number                              | first available         |
+| `topic`              | ROS2 topic name (raw image)                        | `/camera/image_raw`     |
+| `frame_id`           | TF frame id in message header                     | `camera_optical_frame`  |
+| `pixelformat`        | `bayer_rggb8`, `rgb8`, `bgr8`, `mono8`, etc.     | `rgb8`                  |
+| `gain`               | Sensor gain in dB                                 | `0.0`                   |
+| `exposure_time`      | Exposure in microseconds                          | camera default          |
+| `frame_rate`         | Target acquisition frame rate in FPS              | camera default          |
+| `trigger_mode`       | `true` = triggered, `false` = continuous          | `false`                 |
+| `qos_reliability`    | `reliable` or `best_effort`                       | `reliable`              |
+| `jpeg_quality`       | JPEG quality for raw/compressed (1–100)           | `80`                    |
+| `publish_compressed`  | Publish `/topic/compressed`                       | `true`                  |
 
-**Note:** All parameters are startup-only and cannot be changed at runtime without restarting the node.
+**Message type:** the camera publishes full-sensor raw images as `sensor_msgs/msg/Image` and optionally compressed `sensor_msgs/msg/CompressedImage` on `/topic/compressed`. No cropping is applied at the camera node; resize and compression are handled by the pipeline's image_resizer nodes.
+
+**Note:** Parameters are startup-only and cannot be changed at runtime without restarting the node.
 
 **`frame_rate` and `exposure_time` interaction:** The actual frame rate is limited by whichever is lower: the `frame_rate` setting or `1 / exposure_time`. For maximum FPS, set `exposure_time` short enough to allow it. Example for 33 FPS: `frame_rate:=33.0 exposure_time:=25000` (25 ms exposure allows up to 40 FPS).
+
+**Pipeline structure:** For each camera, the pipeline can spawn an `image_resizer` node that subscribes to `/camera_X/image_raw`, resizes (no crop), and publishes `/camera_X/image_new` plus `/camera_X/image_new/compressed`. Configure via the `resizer` block in `cameras.yaml`.
 
 **Bayer RAW:** Triton cameras use BayerRG8 natively. Use `pixelformat:=bayer_rggb8` for zero-copy RAW data. When processing in OpenCV:
 ```python
@@ -129,14 +151,16 @@ The publisher profile also includes the loopback address (`127.0.0.1`) so that c
 # Generate FastDDS profile for the streaming interface
 ./config/setup_fastdds.sh publisher <streaming-interface>
 # Example: ./config/setup_fastdds.sh publisher wlan0
-# This creates fastdds_publisher.xml with 127.0.0.1 (local) + <streaming-ip> (remote)
 
-# Start camera node at full FPS
-./scripts/start_camera.sh <serial> /camera/image_raw bayer_rggb8 "" "" 20.0 25000 33.0
-#                          serial   topic             pixelformat  W  H  gain  exposure fps
+# Start the unified pipeline (inside container)
+# Edits cameras.yaml to set serials, topics, resize/compression
+docker compose up camera_dev
 
-# Start compression relay (in another terminal or background)
-bash ./notebook_setup/compress_stream.sh /camera/image_raw
+# The pipeline publishes:
+# - /camera_X/image_raw (full sensor)
+# - /camera_X/image_raw/compressed (camera-side JPEG)
+# - /camera_X/image_new (resized, no crop)
+# - /camera_X/image_new/compressed (resized + compressed, ideal for streaming)
 ```
 
 **On the receiver machine** (Docker):
@@ -156,7 +180,7 @@ docker compose exec camera_dev bash
 # Inside container:
 source /opt/ros/humble/setup.bash
 python3 /arena_camera_ros2/notebook_setup/stream_viewer.py \
-    --topic /camera/image_raw --compressed
+    --topic /camera_1/image_new --compressed
 ```
 
 ### Bandwidth comparison
@@ -167,7 +191,7 @@ python3 /arena_camera_ros2/notebook_setup/stream_viewer.py \
 | JPEG compressed q=80 | 2048×1536   | 33 FPS  | ~35-45 Mbps   | Full res at full rate (WiFi OK)|
 | RAW full             | 2048×1536   | 33 FPS  | ~825 Mbps     | Requires 1 GbE link            |
 
-JPEG compression is the recommended approach for streaming: it delivers full resolution at full frame rate within WiFi bandwidth. The compression relay (`compress_bayer_stream.py`) uses a multi-threaded encoder pool for throughput.
+The unified pipeline resizes images (no crop) and compresses them via standard ROS2 image_transport. Use `/camera_X/image_new/compressed` for bandwidth-efficient streaming over WiFi or VPN.
 
 ### Streaming over VPN (WireGuard)
 
@@ -189,14 +213,24 @@ Multicast discovery does not work over WireGuard. Use FastDDS `initialPeersList`
 
 ## Multiple Cameras
 
-Scale to multiple cameras using a YAML configuration:
+The unified pipeline supports multiple cameras via a single YAML file:
 
 ```bash
-cp config/cameras_example.yaml config/cameras.yaml
-# Edit cameras.yaml with your camera serials and topics
+# Seriais: edite .env (CAMERA_1_SERIAL, CAMERA_2_SERIAL) — sem recompilar
+# Outras opções: ros2_ws/src/arena_camera_node/config/cameras.yaml
+vim ros2_ws/src/arena_camera_node/config/cameras.yaml
 
-ros2 launch /arena_camera_ros2/launch/multi_camera.launch.py \
-    config_file:=/arena_camera_ros2/config/cameras.yaml
+# Each camera entry can include a resizer block:
+#   resizer:
+#     enabled: true
+#     output_topic: /camera_1/image_new
+#     output_width: 960
+#     output_height: 540
+#     compression:
+#       jpeg_quality: 35
+
+# Start pipeline (reads cameras.yaml automatically)
+docker compose up camera_dev
 ```
 
 For production deployments with many cameras:
@@ -210,14 +244,14 @@ For production deployments with many cameras:
 
 **Direct MP4** (recommended):
 ```bash
-python3 /arena_camera_ros2/scripts/record_video.py --output camera.mp4
+python3 /arena_camera_ros2/scripts/record_video.py --topic /camera_1/image_new/compressed --output camera.mp4
 # Ctrl+C to stop and finalize
 ```
 
 **ROS2 bag** (lossless, for post-processing):
 ```bash
 cd /arena_camera_ros2/bags
-ros2 bag record /camera/image_raw -s mcap
+ros2 bag record /camera_1/image_raw /camera_1/image_new -s mcap
 ```
 
 **Convert bag to MP4:**
@@ -268,9 +302,10 @@ The upstream [arena_camera_ros2](https://github.com/lucidvisionlabs/arena_camera
 4. **Bug fix**: `True` → `true` in `ArenaCameraNode.cpp`
 5. **Added parameter**: `frame_rate` — sets `AcquisitionFrameRateEnable=true` and `AcquisitionFrameRate` on the camera hardware, enabling precise FPS control up to the camera's maximum (e.g., 33.5 FPS for TRI032S at 2048×1536)
 6. **Added**: multi-machine streaming with FastDDS unicast profiles
-7. **Added**: JPEG compression relay for bandwidth-efficient streaming, with multi-threaded encoder (`--workers N`) for full-rate throughput
-8. **Added**: multi-camera launch, YAML config, focus helper, video recording/conversion
-9. **FastDDS publisher profile**: now advertises both loopback (`127.0.0.1`) and the streaming interface IP, enabling local co-processes to communicate at full speed while remote subscribers use the network interface
+7. **Added**: unified pipeline — single `camera_pipeline.launch.py` + `cameras.yaml` (cameras + resize + compression per camera)
+8. **Added**: `image_resizer` node — subscribe raw, publish resized (no crop) + compressed via standard ROS2 image_transport
+9. **Added**: focus helper, video recording/conversion
+10. **FastDDS publisher profile**: advertises loopback (`127.0.0.1`) and the streaming interface IP for local and remote subscribers
 
 ---
 

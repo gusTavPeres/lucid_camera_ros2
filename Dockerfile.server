@@ -1,0 +1,10 @@
+# Dockerfile.server
+FROM ros:humble-ros-core
+
+# Install Fast DDS tools (contains the 'fastdds' CLI)
+RUN apt-get update && apt-get install -y \
+    ros-humble-rmw-fastrtps-cpp \
+    fastdds-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+ENTRYPOINT ["fastdds", "discovery"]

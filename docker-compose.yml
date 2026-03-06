@@ -13,41 +13,46 @@
 #   xhost +local:docker
 
 services:
-  # ============================================================================
-  # CONTAINER DE DESENVOLVIMENTO
-  # Use este para testes, debugging e desenvolvimento
-  # ============================================================================
+  discovery-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    container_name: fastdds_server
+    network_mode: "host" # Mandatory to see Netbird IP
+    command: >
+      -i 0
+    restart: unless-stopped
   camera_dev:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        arenasdk_root_on_host: ${ARENASDK_ROOT_ON_HOST}
+        arenasdk_parent: ${ARENASDK_PARENT}
+        arena_api_root_on_host: ${ARENA_API_ROOT_ON_HOST}
+        arena_api_parent: ${ARENA_API_PARENT}
     container_name: lucid_camera_dev
+    depends_on:
+      - discovery-server
+    env_file:
+      - .env
+    environment:
+      # Seriais (override cameras.yaml); .env já carregado via env_file
+      - CAMERA_1_SERIAL=${CAMERA_1_SERIAL:-}
+      - CAMERA_2_SERIAL=${CAMERA_2_SERIAL:-}
     volumes:
-      # Workspace ROS2 (persistente para desenvolvimento)
-      - ./ros2_ws:/arena_camera_ros2/ros2_ws
-      # Scripts auxiliares
-      - ./scripts:/arena_camera_ros2/scripts
-      # Launch files
-      - ./launch:/arena_camera_ros2/launch
-      # Configurações
+      # Monta o src (launch, config e código-fonte ficam aqui)
+      - ./ros2_ws/src:/arena_camera_ros2/ros2_ws/src
+      # Configurações FastDDS
       - ./config:/arena_camera_ros2/config
       # Pasta para bags gravados
       - ./bags:/arena_camera_ros2/bags
       # X11 para visualização
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-    environment:
-      - DISPLAY=${DISPLAY:-:0}
-      - QT_X11_NO_MITSHM=1
-      - ROS_DOMAIN_ID=42
-      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-      # FastDDS profile restricts DDS to the LAN interface (avoids cross-interface issues).
-      # Generate with: ./config/setup_fastdds.sh subscriber <interface>
-      - FASTRTPS_DEFAULT_PROFILES_FILE=/arena_camera_ros2/config/fastdds_subscriber.xml
-      # Camera identification (used by production camera_N services below)
-      - CAMERA_SERIAL=
-      - CAMERA_TOPIC=/camera/image_raw
+      # Scripts do host
+      - ./scripts:/arena_camera_ros2/scripts
     # Modo host para acesso direto à rede (necessário para GigE Vision)
-    network_mode: host
+    network_mode: "host"
     # Privilegiado para acesso ao hardware
     privileged: true
     # IPC compartilhado para melhor performance
@@ -56,67 +61,9 @@ services:
     tty: true
     # Restart automático em caso de falha
     restart: unless-stopped
-    command: bash
-
-  # ============================================================================
-  # CÂMERA 1 - Produção
-  # Descomente e configure o serial da câmera
-  # ============================================================================
-  # camera_1:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #   container_name: lucid_camera_1
-  #   volumes:
-  #     - ./ros2_ws:/arena_camera_ros2/ros2_ws:ro
-  #     - ./bags:/arena_camera_ros2/bags
-  #     - /tmp/.X11-unix:/tmp/.X11-unix
-  #   environment:
-  #     - DISPLAY=${DISPLAY}
-  #     - ROS_DOMAIN_ID=42
-  #     - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-  #     - CAMERA_SERIAL=YOUR_CAMERA_1_SERIAL
-  #     - CAMERA_TOPIC=/camera_1/image_raw
-  #   network_mode: host
-  #   privileged: true
-  #   ipc: host
-  #   restart: unless-stopped
-  #   command: >
-  #     bash -c "source /opt/ros/humble/setup.bash &&
-  #              source /arena_camera_ros2/ros2_ws/install/setup.bash &&
-  #              ros2 run arena_camera_node start --ros-args
-  #              -p serial:=$${CAMERA_SERIAL}
-  #              -p topic:=$${CAMERA_TOPIC}
-  #              -p pixelformat:=rgb8
-  #              -p qos_reliability:=reliable"
-
-  # ============================================================================
-  # CÂMERA 2-8 - Copie o bloco acima e ajuste os parâmetros
-  # ============================================================================
-  # camera_2:
-  #   ...
-  #   environment:
-  #     - CAMERA_SERIAL=YOUR_CAMERA_2_SERIAL
-  #     - CAMERA_TOPIC=/camera_2/image_raw
-
-  # ============================================================================
-  # GRAVADOR DE BAGS (Opcional)
-  # Grava todas as imagens de todas as câmeras
-  # ============================================================================
-  # bag_recorder:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #   container_name: lucid_bag_recorder
-  #   volumes:
-  #     - ./bags:/arena_camera_ros2/bags
-  #   environment:
-  #     - ROS_DOMAIN_ID=42
-  #     - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-  #   network_mode: host
-  #   ipc: host
-  #   restart: unless-stopped
-  #   command: >
-  #     bash -c "source /opt/ros/humble/setup.bash &&
-  #              cd /arena_camera_ros2/bags &&
-  #              ros2 bag record -a"
+    command: >
+      bash -lc "source /opt/ros/humble/setup.bash && \
+      colcon build --symlink-install && \
+      source /arena_camera_ros2/ros2_ws/install/setup.bash && \
+      ros2 launch arena_camera_node camera_pipeline.launch.py \
+      config_file:=/arena_camera_ros2/ros2_ws/src/arena_camera_node/config/cameras.yaml"

@@ -53,3 +53,5 @@ Thumbs.db
 *~
 persist.json
 scripts/persist.json
+
+.env
