@@ -27,10 +27,10 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        arenasdk_root_on_host: ${ARENASDK_ROOT_ON_HOST}
-        arenasdk_parent: ${ARENASDK_PARENT}
-        arena_api_root_on_host: ${ARENA_API_ROOT_ON_HOST}
-        arena_api_parent: ${ARENA_API_PARENT}
+        arenasdk_root_on_host: ${ARENASDK_ROOT_ON_HOST:-./resources/ArenaSDK/linux64}
+        arenasdk_parent: ${ARENASDK_PARENT:-/}
+        arena_api_root_on_host: ${ARENA_API_ROOT_ON_HOST:-./resources/arena_api}
+        arena_api_parent: ${ARENA_API_PARENT:-/arena_api}
     container_name: lucid_camera_dev
     depends_on:
       - discovery-server
@@ -40,6 +40,7 @@ services:
       # Seriais (override cameras.yaml); .env já carregado via env_file
       - CAMERA_1_SERIAL=${CAMERA_1_SERIAL:-}
       - CAMERA_2_SERIAL=${CAMERA_2_SERIAL:-}
+      - ROS_DISCOVERY_SERVER=${ROS_DISCOVERY_SERVER:-}
     volumes:
       # Monta o src (launch, config e código-fonte ficam aqui)
       - ./ros2_ws/src:/arena_camera_ros2/ros2_ws/src
@@ -62,7 +63,7 @@ services:
     # Restart automático em caso de falha
     restart: unless-stopped
     command: >
-      bash -lc "source /opt/ros/humble/setup.bash && \
+      bash -lc "/arena_camera_ros2/scripts/setup_routes.sh; source /opt/ros/humble/setup.bash && \
       colcon build --symlink-install && \
       source /arena_camera_ros2/ros2_ws/install/setup.bash && \
       ros2 launch arena_camera_node camera_pipeline.launch.py \

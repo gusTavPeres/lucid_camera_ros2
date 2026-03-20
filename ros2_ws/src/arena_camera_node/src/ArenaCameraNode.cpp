@@ -419,8 +419,8 @@ void ArenaCameraNode::set_nodes_()
   set_nodes_load_default_profile_();
   set_nodes_full_sensor_();
   set_nodes_gain_();
-  set_nodes_frame_rate_();
   set_nodes_pixelformat_();
+  set_nodes_frame_rate_();
   set_nodes_exposure_();
   set_nodes_trigger_mode_();
   set_nodes_throughput_();
@@ -473,8 +473,13 @@ void ArenaCameraNode::set_nodes_frame_rate_()
   if (is_passed_frame_rate_) {
     auto nodemap = m_pDevice->GetNodeMap();
     Arena::SetNodeValue<bool>(nodemap, "AcquisitionFrameRateEnable", true);
-    Arena::SetNodeValue<double>(nodemap, "AcquisitionFrameRate", frame_rate_);
-    log_info(std::string("\tAcquisitionFrameRate set to ") + std::to_string(frame_rate_));
+    try {
+      Arena::SetNodeValue<double>(nodemap, "AcquisitionFrameRate", frame_rate_);
+      log_info(std::string("\tAcquisitionFrameRate set to ") + std::to_string(frame_rate_));
+    } catch (GenICam::OutOfRangeException&) {
+      log_warn(std::string("	AcquisitionFrameRate ") + std::to_string(frame_rate_) +
+               " out of range for current link speed, using firmware maximum");
+    }
   }
 }
 
