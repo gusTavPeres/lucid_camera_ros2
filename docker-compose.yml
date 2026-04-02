@@ -2,15 +2,17 @@
 #
 # Usage:
 #   Build:   docker compose build
-#   Start:   docker compose up -d camera_dev
+#   Start:   docker compose up -d
 #   Shell:   docker compose exec camera_dev bash
 #   Logs:    docker compose logs -f
 #   Stop:    docker compose down
 #
-# Before starting: generate FastDDS profile for this machine:
-#   ./config/setup_fastdds.sh subscriber <interface>   (e.g., eth0, wlan0)
-# Then allow X11 access for graphical viewers:
-#   xhost +local:docker
+# Comunicação remota (VPN):
+#   O Discovery Server roda no host e é acessível via Netbird.
+#   O notebook receptor conecta com:
+#     export ROS_DISCOVERY_SERVER=100.107.134.30:11811
+#     export FASTRTPS_DEFAULT_PROFILES_FILE=<path>/fastdds_subscriber.xml
+#     export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 
 services:
   discovery-server:
@@ -18,10 +20,15 @@ services:
       context: .
       dockerfile: Dockerfile.server
     container_name: fastdds_server
-    network_mode: "host" # Mandatory to see Netbird IP
+    network_mode: "host"
+    environment:
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/config/fastdds_discovery_server.xml
+    volumes:
+      - ./config:/config:ro
     command: >
-      -i 0
+      -i 0 -l 100.107.134.30
     restart: unless-stopped
+
   camera_dev:
     build:
       context: .
@@ -37,34 +44,28 @@ services:
     env_file:
       - .env
     environment:
-      # Seriais (override cameras.yaml); .env já carregado via env_file
       - CAMERA_1_SERIAL=${CAMERA_1_SERIAL:-}
       - CAMERA_2_SERIAL=${CAMERA_2_SERIAL:-}
-      - ROS_DISCOVERY_SERVER=${ROS_DISCOVERY_SERVER:-}
+      - ROS_DISCOVERY_SERVER=${ROS_DISCOVERY_SERVER:-100.107.134.30:11811}
+      - ROS_SUPER_CLIENT=${ROS_SUPER_CLIENT:-true}
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/arena_camera_ros2/config/fastdds_publisher.xml
     volumes:
-      # Monta o src (launch, config e código-fonte ficam aqui)
       - ./ros2_ws/src:/arena_camera_ros2/ros2_ws/src
-      # Configurações FastDDS
       - ./config:/arena_camera_ros2/config
-      # Pasta para bags gravados
       - ./bags:/arena_camera_ros2/bags
-      # X11 para visualização
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      # Scripts do host
       - ./scripts:/arena_camera_ros2/scripts
-    # Modo host para acesso direto à rede (necessário para GigE Vision)
     network_mode: "host"
-    # Privilegiado para acesso ao hardware
     privileged: true
-    # IPC compartilhado para melhor performance
     ipc: host
     stdin_open: true
     tty: true
-    # Restart automático em caso de falha
     restart: unless-stopped
     command: >
-      bash -lc "/arena_camera_ros2/scripts/setup_routes.sh; source /opt/ros/humble/setup.bash && \
-      colcon build --symlink-install && \
-      source /arena_camera_ros2/ros2_ws/install/setup.bash && \
-      ros2 launch arena_camera_node camera_pipeline.launch.py \
+      bash -lc "/arena_camera_ros2/scripts/setup_routes.sh; source /opt/ros/humble/setup.bash &&
+      colcon build --symlink-install &&
+      source /arena_camera_ros2/ros2_ws/install/setup.bash &&
+      ros2 launch arena_camera_node camera_pipeline.launch.py
       config_file:=/arena_camera_ros2/ros2_ws/src/arena_camera_node/config/cameras.yaml"
