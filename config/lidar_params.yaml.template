@@ -1,0 +1,51 @@
+# Ouster driver params — rendered from this template by the entrypoint
+# (envsubst replaces ${VAR} from container env).
+#
+# Beginner notes:
+#   - The top-level key MUST be the fully-qualified node name as it appears
+#     at runtime. Our launch uses namespace=ouster + node_name=os_driver,
+#     so the key is "/ouster/os_driver".
+#   - Anything under ros__parameters is set on the node at startup.
+#   - Values left empty mean "keep the sensor's current setting" — see
+#     ouster_ros/config/driver_params.yaml for the full reference list.
+
+/ouster/os_driver:
+  ros__parameters:
+    # === Network ===
+    sensor_hostname: "${LIDAR_HOSTNAME}"     # e.g. 192.168.1.200
+    udp_dest:        "${LIDAR_UDP_DEST}"     # empty = let driver pick host IP
+    lidar_port:      0                       # 0 = auto-pick free port
+    imu_port:        0                       # 0 = auto-pick free port
+
+    # === Sensor mode ===
+    lidar_mode:        "${LIDAR_MODE}"           # 1024x10 is a safe default
+    timestamp_mode:    "${LIDAR_TIMESTAMP_MODE}" # TIME_FROM_ROS_TIME = bag-friendly
+    udp_profile_lidar: "${LIDAR_UDP_PROFILE}"    # RNG19_RFL8_SIG16_NIR16 = full single return
+
+    # === Frames (TF) ===
+    sensor_frame:      os_sensor
+    lidar_frame:       os_lidar
+    imu_frame:         os_imu
+    point_cloud_frame: os_lidar
+    pub_static_tf:     true
+
+    # === Output config ===
+    # IMU|PCL|SCAN|IMG|TLM — RAW omitted to save bandwidth over VPN.
+    proc_mask:  "IMU|PCL|SCAN|IMG|TLM"
+    point_type: original
+    organized:  true
+    destagger:  true
+
+    # === Reconnect policy (test bench friendly) ===
+    attempt_reconnect:                  true
+    dormant_period_between_reconnects:  1.0
+    max_failed_reconnect_attempts:      30
+
+    # === Range limits ===
+    min_range: 0.0
+    max_range: 200.0
+
+    # === QoS ===
+    # false = use sensor QoS (best_effort, volatile) — preferred for live data
+    # true  = system default QoS — needed if you want rosbag to record them
+    use_system_default_qos: false

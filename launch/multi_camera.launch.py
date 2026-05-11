@@ -42,6 +42,7 @@ def generate_camera_nodes(context):
                         "pixelformat": cam.get("pixelformat", "rgb8"),
                         "gain": cam.get("gain", 0.0),
                         "exposure_time": cam.get("exposure_time", 10000.0),
+                        "frame_rate": cam.get("frame_rate", 0.0),
                         "qos_reliability": cam.get("qos_reliability", "reliable"),
                         "trigger_mode": cam.get("trigger_mode", False),
                     }

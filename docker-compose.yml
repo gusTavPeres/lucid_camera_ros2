@@ -1,122 +1,85 @@
-# Docker Compose — Lucid Vision Cameras / ROS2 Humble
+# Docker Compose — Lucid camera + Ouster LiDAR on ROS 2 Humble
 #
-# Usage:
-#   Build:   docker compose build
-#   Start:   docker compose up -d camera_dev
-#   Shell:   docker compose exec camera_dev bash
-#   Logs:    docker compose logs -f
-#   Stop:    docker compose down
+# Build context is the PARENT directory of this file so the Dockerfile can
+# COPY both lucid_camera_ros2/ and ouster-ros-humble-devel/ siblings.
 #
-# Before starting: generate FastDDS profile for this machine:
-#   ./config/setup_fastdds.sh subscriber <interface>   (e.g., eth0, wlan0)
-# Then allow X11 access for graphical viewers:
-#   xhost +local:docker
+# Usage (preferred — via the convenience script):
+#   ./scripts/start.sh
+#
+# Or manually:
+#   docker compose build
+#   docker compose up -d sensor_stack
+#   docker compose exec sensor_stack bash
+#   docker compose logs -f sensor_stack
+#   docker compose down
+#
+# IMPORTANT: run ./scripts/host_setup.sh on the host FIRST (it sets MTU 9000
+# on the sensor interfaces, adds the IP alias for the Ouster subnet, etc.).
+# A container in network_mode: host cannot reconfigure host NICs by itself.
 
 services:
-  # ============================================================================
-  # CONTAINER DE DESENVOLVIMENTO
-  # Use este para testes, debugging e desenvolvimento
-  # ============================================================================
-  camera_dev:
+  sensor_stack:
     build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: lucid_camera_dev
+      # Parent dir → reaches both lucid_camera_ros2/ and ouster-ros-humble-devel/
+      context: ..
+      dockerfile: lucid_camera_ros2/Dockerfile
+    container_name: sensor_stack
     volumes:
-      # Workspace ROS2 (persistente para desenvolvimento)
+      # Workspace bind mount: lets you edit arena_camera_node sources from
+      # the host. ouster_ros is staged from /opt/vendor on first start, so
+      # the empty src/ on the host gets populated automatically.
       - ./ros2_ws:/arena_camera_ros2/ros2_ws
-      # Scripts auxiliares
       - ./scripts:/arena_camera_ros2/scripts
-      # Launch files
       - ./launch:/arena_camera_ros2/launch
-      # Configurações
       - ./config:/arena_camera_ros2/config
-      # Pasta para bags gravados
       - ./bags:/arena_camera_ros2/bags
-      # X11 para visualização
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
     environment:
+      # --- X11 ---
       - DISPLAY=${DISPLAY:-:0}
       - QT_X11_NO_MITSHM=1
-      - ROS_DOMAIN_ID=42
+
+      # --- ROS 2 ---
+      - ROS_DOMAIN_ID=0
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-      # FastDDS profile restricts DDS to the LAN interface (avoids cross-interface issues).
-      # Generate with: ./config/setup_fastdds.sh subscriber <interface>
-      - FASTRTPS_DEFAULT_PROFILES_FILE=/arena_camera_ros2/config/fastdds_subscriber.xml
-      # Camera identification (used by production camera_N services below)
-      - CAMERA_SERIAL=
-      - CAMERA_TOPIC=/camera/image_raw
-    # Modo host para acesso direto à rede (necessário para GigE Vision)
+
+      # --- DDS / VPN ---
+      # HOST_NETBIRD_IP: leave empty → entrypoint autodetects (first IPv4 in
+      # 100.64.0.0/10). Set explicitly if Netbird is unusual on this host.
+      - HOST_NETBIRD_IP=${HOST_NETBIRD_IP:-}
+      # REMOTE_PEER_IPS: comma-separated list of remote DDS peers reachable
+      # over Netbird. Example: 100.107.107.160,100.107.42.10
+      - REMOTE_PEER_IPS=${REMOTE_PEER_IPS:-100.107.107.160}
+      # NETBIRD_IFACE: optional override; otherwise autodetected by IP range.
+      - NETBIRD_IFACE=${NETBIRD_IFACE:-}
+
+      # --- LiDAR (Ouster) ---
+      - LIDAR_HOSTNAME=${LIDAR_HOSTNAME:-192.168.1.200}
+      # Empty udp_dest = let the driver pick the host IP automatically (the
+      # one used to TCP-connect to the sensor). Override only if the auto
+      # value is wrong (e.g. multi-homed host).
+      - LIDAR_UDP_DEST=${LIDAR_UDP_DEST:-}
+      - LIDAR_MODE=${LIDAR_MODE:-1024x10}
+      - LIDAR_TIMESTAMP_MODE=${LIDAR_TIMESTAMP_MODE:-TIME_FROM_ROS_TIME}
+      - LIDAR_UDP_PROFILE=${LIDAR_UDP_PROFILE:-RNG19_RFL8_SIG16_NIR16}
+
+      # --- Camera (Lucid) ---
+      - CAMERA_CONFIG=${CAMERA_CONFIG:-/arena_camera_ros2/config/cameras.yaml}
+      - RELAY_QUALITY=${RELAY_QUALITY:-80}
+      - RELAY_WORKERS=${RELAY_WORKERS:-4}
+
+      # --- Bringup toggles (set ENABLE_LIDAR=false to run camera only, etc.) ---
+      - ENABLE_CAMERA=${ENABLE_CAMERA:-true}
+      - ENABLE_LIDAR=${ENABLE_LIDAR:-true}
+
+    # Host networking is required for:
+    #   - GigE Vision discovery (multicast)
+    #   - Ouster sensor on its own /24
+    #   - Netbird interface visibility for DDS
     network_mode: host
-    # Privilegiado para acesso ao hardware
-    privileged: true
-    # IPC compartilhado para melhor performance
+    privileged: true     # required for adding routes from inside the container
     ipc: host
     stdin_open: true
     tty: true
-    # Restart automático em caso de falha
     restart: unless-stopped
-    command: bash
-
-  # ============================================================================
-  # CÂMERA 1 - Produção
-  # Descomente e configure o serial da câmera
-  # ============================================================================
-  # camera_1:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #   container_name: lucid_camera_1
-  #   volumes:
-  #     - ./ros2_ws:/arena_camera_ros2/ros2_ws:ro
-  #     - ./bags:/arena_camera_ros2/bags
-  #     - /tmp/.X11-unix:/tmp/.X11-unix
-  #   environment:
-  #     - DISPLAY=${DISPLAY}
-  #     - ROS_DOMAIN_ID=42
-  #     - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-  #     - CAMERA_SERIAL=YOUR_CAMERA_1_SERIAL
-  #     - CAMERA_TOPIC=/camera_1/image_raw
-  #   network_mode: host
-  #   privileged: true
-  #   ipc: host
-  #   restart: unless-stopped
-  #   command: >
-  #     bash -c "source /opt/ros/humble/setup.bash &&
-  #              source /arena_camera_ros2/ros2_ws/install/setup.bash &&
-  #              ros2 run arena_camera_node start --ros-args
-  #              -p serial:=$${CAMERA_SERIAL}
-  #              -p topic:=$${CAMERA_TOPIC}
-  #              -p pixelformat:=rgb8
-  #              -p qos_reliability:=reliable"
-
-  # ============================================================================
-  # CÂMERA 2-8 - Copie o bloco acima e ajuste os parâmetros
-  # ============================================================================
-  # camera_2:
-  #   ...
-  #   environment:
-  #     - CAMERA_SERIAL=YOUR_CAMERA_2_SERIAL
-  #     - CAMERA_TOPIC=/camera_2/image_raw
-
-  # ============================================================================
-  # GRAVADOR DE BAGS (Opcional)
-  # Grava todas as imagens de todas as câmeras
-  # ============================================================================
-  # bag_recorder:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #   container_name: lucid_bag_recorder
-  #   volumes:
-  #     - ./bags:/arena_camera_ros2/bags
-  #   environment:
-  #     - ROS_DOMAIN_ID=42
-  #     - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-  #   network_mode: host
-  #   ipc: host
-  #   restart: unless-stopped
-  #   command: >
-  #     bash -c "source /opt/ros/humble/setup.bash &&
-  #              cd /arena_camera_ros2/bags &&
-  #              ros2 bag record -a"
+    command: bash /arena_camera_ros2/scripts/start_sensor_stack.sh

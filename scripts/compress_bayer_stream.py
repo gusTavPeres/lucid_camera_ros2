@@ -18,6 +18,8 @@ Arguments:
     --output   : Output topic (default: <input>/compressed)
     --quality  : JPEG quality 1-100 (default: 80)
     --workers  : JPEG encoder threads (default: 2)
+    --width    : Resize output width before encoding (0 = original)
+    --height   : Resize output height before encoding (0 = original)
 """
 
 import rclpy
@@ -35,7 +37,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 class BayerCompressor(Node):
-    def __init__(self, input_topic, output_topic, jpeg_quality, workers):
+    def __init__(self, input_topic, output_topic, jpeg_quality, workers, out_width=0, out_height=0):
         super().__init__('bayer_compressor')
 
         self.bridge = CvBridge()
@@ -71,10 +73,15 @@ class BayerCompressor(Node):
         self.encoding = None
         self._encoding_lock = threading.Lock()
 
+        self.out_width = out_width
+        self.out_height = out_height
+
         self.get_logger().info(f'Input:   {input_topic}')
         self.get_logger().info(f'Output:  {output_topic}')
         self.get_logger().info(f'Quality: JPEG q={jpeg_quality}')
         self.get_logger().info(f'Workers: {workers} encoder threads')
+        if out_width and out_height:
+            self.get_logger().info(f'Resize:  {out_width}x{out_height}')
 
     def image_callback(self, msg):
         # Detect encoding on first frame (synchronized)
@@ -105,22 +112,31 @@ class BayerCompressor(Node):
             bayer_conv = self.bayer_conversion
 
             self._jpeg_pool.submit(
-                self._process_and_publish, data, h, w, enc, bayer_conv, header, bytes_raw
+                self._process_and_publish, data, h, w, enc, bayer_conv, header, bytes_raw,
+                self.out_width, self.out_height
             )
 
         except Exception as e:
             self.get_logger().error(f'Error in callback: {e}')
 
-    def _process_and_publish(self, data, h, w, enc, bayer_conv, header, bytes_raw):
+    def _process_and_publish(self, data, h, w, enc, bayer_conv, header, bytes_raw, out_width=0, out_height=0):
         try:
             # Demosaic
-            raw = np.frombuffer(data, dtype=np.uint8).reshape(h, w)
+            flat = np.frombuffer(data, dtype=np.uint8)
             if bayer_conv is not None:
-                bgr = cv2.cvtColor(raw, bayer_conv)
+                bgr = cv2.cvtColor(flat.reshape(h, w), bayer_conv)
             elif enc == 'rgb8':
-                bgr = cv2.cvtColor(raw.reshape(h, w, 3), cv2.COLOR_RGB2BGR)
+                bgr = cv2.cvtColor(flat.reshape(h, w, 3), cv2.COLOR_RGB2BGR)
+            elif enc == 'bgr8':
+                bgr = flat.reshape(h, w, 3)
+            elif enc == 'mono8':
+                bgr = cv2.cvtColor(flat.reshape(h, w), cv2.COLOR_GRAY2BGR)
             else:
-                bgr = raw.reshape(h, w, 3)
+                bgr = flat.reshape(h, w, 3)
+
+            # Resize if requested
+            if out_width and out_height:
+                bgr = cv2.resize(bgr, (out_width, out_height), interpolation=cv2.INTER_AREA)
 
             # JPEG encode
             success, buf = cv2.imencode('.jpg', bgr, [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality])
@@ -178,12 +194,17 @@ def main(args=None):
                         help='JPEG quality 1-100 (default: 80)')
     parser.add_argument('--workers', type=int, default=4,
                         help='Number of JPEG encoder threads (default: 4)')
+    parser.add_argument('--width', type=int, default=0,
+                        help='Resize output width (0 = original)')
+    parser.add_argument('--height', type=int, default=0,
+                        help='Resize output height (0 = original)')
 
     parsed_args = parser.parse_args()
     output_topic = parsed_args.output or (parsed_args.input + '/compressed')
 
     rclpy.init(args=args)
-    node = BayerCompressor(parsed_args.input, output_topic, parsed_args.quality, parsed_args.workers)
+    node = BayerCompressor(parsed_args.input, output_topic, parsed_args.quality, parsed_args.workers,
+                            parsed_args.width, parsed_args.height)
     mt_executor = MultiThreadedExecutor(num_threads=parsed_args.workers + 1)
     mt_executor.add_node(node)
     try:

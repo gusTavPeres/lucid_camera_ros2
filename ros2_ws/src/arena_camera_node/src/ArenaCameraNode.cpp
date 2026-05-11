@@ -16,15 +16,8 @@ void ArenaCameraNode::parse_parameters_()
   std::string nextParameterToDeclare = "";
   try {
     nextParameterToDeclare = "serial";
-    if (this->has_parameter("serial")) {
-        int serial_integer;
-        this->get_parameter<int>("serial", serial_integer);
-        serial_ = std::to_string(serial_integer);
-        is_passed_serial_ = true;
-} else {
-    serial_ = ""; // Set it to an empty string to indicate it's not passed.
-    is_passed_serial_ = false;
-}
+    serial_ = this->declare_parameter("serial", std::string(""));
+    is_passed_serial_ = !serial_.empty();
     
     nextParameterToDeclare = "pixelformat";
     pixelformat_ros_ = this->declare_parameter("pixelformat", "");
@@ -426,8 +419,8 @@ void ArenaCameraNode::set_nodes_()
   set_nodes_load_default_profile_();
   set_nodes_roi_();
   set_nodes_gain_();
-  set_nodes_frame_rate_();
   set_nodes_pixelformat_();
+  set_nodes_frame_rate_();
   set_nodes_exposure_();
   set_nodes_trigger_mode_();
   // configure Auto Negotiate Packet Size and Packet Resend
@@ -485,8 +478,13 @@ void ArenaCameraNode::set_nodes_frame_rate_()
   if (is_passed_frame_rate_) {
     auto nodemap = m_pDevice->GetNodeMap();
     Arena::SetNodeValue<bool>(nodemap, "AcquisitionFrameRateEnable", true);
-    Arena::SetNodeValue<double>(nodemap, "AcquisitionFrameRate", frame_rate_);
-    log_info(std::string("\tAcquisitionFrameRate set to ") + std::to_string(frame_rate_));
+    try {
+      Arena::SetNodeValue<double>(nodemap, "AcquisitionFrameRate", frame_rate_);
+      log_info(std::string("\tAcquisitionFrameRate set to ") + std::to_string(frame_rate_));
+    } catch (GenICam::OutOfRangeException&) {
+      log_warn(std::string("	AcquisitionFrameRate ") + std::to_string(frame_rate_) +
+               " out of range for current link speed, using firmware maximum");
+    }
   }
 }
 

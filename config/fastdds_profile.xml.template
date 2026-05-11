@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  FastDDS profile template — rendered at container start by the entrypoint
+  via `envsubst`. Output goes to /tmp/fastdds_profile.xml, then exported as
+  FASTRTPS_DEFAULT_PROFILES_FILE.
+
+  Placeholders (expanded by the entrypoint):
+    ${HOST_NETBIRD_IP}     — this host's Netbird (WireGuard) IPv4.
+                             Autodetected from `ip -4 addr` matching
+                             100.64.0.0/10 (real values usually 100.107.x.x).
+    ${REMOTE_PEER_IPS_XML} — pre-rendered <locator> blocks, one per remote
+                             peer from REMOTE_PEER_IPS (comma-separated env).
+
+  Why these settings (beginner-friendly notes):
+
+  1. <interfaceWhiteList> on the transport restricts which host network
+     interfaces FastDDS may use. We list 127.0.0.1 (loopback, for in-host
+     comms — camera node <-> relay <-> lidar node) and the Netbird IP (for
+     remote peers). The sensor LANs (169.254.x.x, 192.168.1.x) are NOT
+     listed -> DDS never tries to push sensor data over them.
+
+  2. <maxMessageSize>1400</maxMessageSize> caps each UDP datagram below the
+     Netbird MTU of 1420 bytes. Large messages (PointCloud2 frames are
+     hundreds of KB) get RTPS-fragmented into 1400-byte chunks. This avoids
+     IP-level fragmentation, which is what kills throughput over VPNs.
+
+  3. <useBuiltinTransports>false</useBuiltinTransports> disables FastDDS's
+     default UDP + shared-memory transports so ONLY our custom `vpn_udp` is
+     used. This is the lever that makes the whitelist effective.
+
+  4. <initialPeersList> tells the participant which addresses to send
+     discovery (PDP) messages to. Without multicast (disabled above), we
+     must announce all peers explicitly. Loopback + this host's IP +
+     each remote peer.
+
+  5. <defaultUnicastLocatorList> are the addresses this participant
+     advertises to others as reachable. Same idea.
+
+  Edit this file to add/remove peers. Re-`docker compose restart sensor_stack`
+  to apply (the entrypoint re-renders on every start).
+-->
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+
+  <transport_descriptors>
+    <transport_descriptor>
+      <transport_id>vpn_udp</transport_id>
+      <type>UDPv4</type>
+      <!-- VPN-MTU-aware caps; see note 2 above -->
+      <maxMessageSize>1400</maxMessageSize>
+      <sendBufferSize>1048576</sendBufferSize>
+      <receiveBufferSize>4194304</receiveBufferSize>
+      <interfaceWhiteList>
+        <address>127.0.0.1</address>
+        <address>${HOST_NETBIRD_IP}</address>
+      </interfaceWhiteList>
+    </transport_descriptor>
+  </transport_descriptors>
+
+  <participant profile_name="default" is_default_profile="true">
+    <rtps>
+      <userTransports>
+        <transport_id>vpn_udp</transport_id>
+      </userTransports>
+      <useBuiltinTransports>false</useBuiltinTransports>
+
+      <defaultUnicastLocatorList>
+        <locator><udpv4><address>127.0.0.1</address></udpv4></locator>
+        <locator><udpv4><address>${HOST_NETBIRD_IP}</address></udpv4></locator>
+      </defaultUnicastLocatorList>
+
+      <builtin>
+        <initialPeersList>
+          <locator><udpv4><address>127.0.0.1</address></udpv4></locator>
+          <locator><udpv4><address>${HOST_NETBIRD_IP}</address></udpv4></locator>
+${REMOTE_PEER_IPS_XML}
+        </initialPeersList>
+      </builtin>
+    </rtps>
+  </participant>
+</profiles>
