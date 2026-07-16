@@ -24,8 +24,11 @@ git clone <repo-url> && cd lucid_camera_ros2
 
 # 1. Place ArenaSDK and arena_api in resources/ (see Requirements above)
 
-# 2. Configure .env (ARENASDK paths, CAMERA_1_SERIAL, CAMERA_2_SERIAL, ROS_DOMAIN_ID)
-# 3. Edit cameras.yaml para outras opções (resize, compressão); serials vêm do .env
+# 2. Configure .env (paths do ArenaSDK, ROS_DOMAIN_ID, discovery server)
+# 3. Configure as câmeras (arquivo único: serial, ip/iface, exposição, fps,
+#    resize, compressão) — copie o exemplo e edite (local, fora do git):
+cp ros2_ws/src/arena_camera_node/config/cameras_example.yaml \
+   ros2_ws/src/arena_camera_node/config/cameras.yaml
 
 # 4. Configure GigE network interface (run on host, not in container)
 sudo ./scripts/setup_network.sh <gige-interface>   # e.g., enp3s0
@@ -61,7 +64,7 @@ ros2 run arena_camera_node start --ros-args \
 Key variables:
 - `ARENASDK_ROOT_ON_HOST` and `ARENA_API_ROOT_ON_HOST`: input files used at image build time.
 - `FASTRTPS_DEFAULT_PROFILES_FILE`: DDS interface restriction profile used in container runtime.
-- `CAMERA_1_SERIAL`, `CAMERA_2_SERIAL`, …: serials das câmeras (override do `cameras.yaml`). Edite aqui para trocar câmeras sem recompilar.
+- Setup por câmera (serial, ip/iface, exposição, resize, compressão): tudo em `ros2_ws/src/arena_camera_node/config/cameras.yaml`. `CAMERA_<NOME>_SERIAL` no `.env` é um override opcional de serial.
 
 ---
 
@@ -86,7 +89,8 @@ lucid_camera_ros2/
 │   ├── record_video.py             # Direct MP4 recording from camera topic
 │   ├── bag_to_video.py             # Convert ROS2 bag to MP4
 │   └── convert_bag.py              # One-command bag-to-video wrapper
-├── notebook_setup/                 # Publisher-side tools (camera machine)
+├── notebook_setup/                 # Multi-machine streaming tools (publisher + receiver)
+│   ├── env.sh                      # Receiver env in one command (discovery server + profile)
 │   ├── setup_toolbox.sh            # ROS2 Humble container setup (toolbox/distrobox)
 │   ├── compress_stream.sh          # Start compression relay for streaming
 │   ├── throttle_camera.sh          # FPS limiter (simpler alternative to compression)
@@ -97,7 +101,7 @@ lucid_camera_ros2/
         ├── launch/
         │   └── camera_pipeline.launch.py   # Unified pipeline (camera + resize + compression)
         └── config/
-            └── cameras.yaml       # Unified config: cameras + resizer + compression
+            └── cameras.yaml       # Single source: serial, ip/iface, capture, resize, compression
 ```
 
 ---
@@ -115,16 +119,14 @@ lucid_camera_ros2/
 | `frame_rate`         | Target acquisition frame rate in FPS              | camera default          |
 | `trigger_mode`       | `true` = triggered, `false` = continuous          | `false`                 |
 | `qos_reliability`    | `reliable` or `best_effort`                       | `reliable`              |
-| `jpeg_quality`       | JPEG quality for raw/compressed (1–100)           | `80`                    |
-| `publish_compressed`  | Publish `/topic/compressed`                       | `true`                  |
 
-**Message type:** the camera publishes full-sensor raw images as `sensor_msgs/msg/Image` and optionally compressed `sensor_msgs/msg/CompressedImage` on `/topic/compressed`. No cropping is applied at the camera node; resize and compression are handled by the pipeline's image_resizer nodes.
+**Message type:** the camera publishes full-sensor raw images as `sensor_msgs/msg/Image`. No cropping or compression is applied at the camera node; resize and JPEG compression (`/topic_new/compressed`) are handled by the pipeline's image_resizer nodes via image_transport.
 
 **Note:** Parameters are startup-only and cannot be changed at runtime without restarting the node.
 
 **`frame_rate` and `exposure_time` interaction:** The actual frame rate is limited by whichever is lower: the `frame_rate` setting or `1 / exposure_time`. For maximum FPS, set `exposure_time` short enough to allow it. Example for 33 FPS: `frame_rate:=33.0 exposure_time:=25000` (25 ms exposure allows up to 40 FPS).
 
-**Pipeline structure:** For each camera, the pipeline can spawn an `image_resizer` node that subscribes to `/camera_X/image_raw`, resizes (no crop), and publishes `/camera_X/image_new` plus `/camera_X/image_new/compressed`. Configure via the `resizer` block in `cameras.yaml`.
+**Pipeline structure:** For each camera, the pipeline can spawn an `image_resizer` node that subscribes to `/camera_X/image_raw`, resizes (no crop), and publishes `/camera_X/image_new` plus `/camera_X/image_new/compressed`. Configure via the `resizer` block in `cameras.yaml` — the same file also holds serial, `ip`/`iface` (host routes via `scripts/setup_routes.sh`) and capture settings, so one file defines the whole camera setup.
 
 **Bayer RAW:** Triton cameras use BayerRG8 natively. Use `pixelformat:=bayer_rggb8` for zero-copy RAW data. When processing in OpenCV:
 ```python
@@ -306,6 +308,20 @@ The upstream [arena_camera_ros2](https://github.com/lucidvisionlabs/arena_camera
 8. **Added**: `image_resizer` node — subscribe raw, publish resized (no crop) + compressed via standard ROS2 image_transport
 9. **Added**: focus helper, video recording/conversion
 10. **FastDDS publisher profile**: advertises loopback (`127.0.0.1`) and the streaming interface IP for local and remote subscribers
+
+---
+
+## Twizy AIR-UFG (integração no carro)
+
+Material da integração deste driver no Renault Twizy (6 câmeras GigE +
+LiDAR Ouster + Fast DDS Discovery Server):
+
+- `docs/tutorial-viewer.md` — passo a passo genérico para
+  rodar o viewer (câmeras e LiDAR) em qualquer máquina via cabo Ethernet.
+- `docs/twizy-alteracoes-2026-07-03.md` — registro das alterações feitas
+  no PC do carro (rede, systemd, `.env`, launch) e seus motivos.
+- `twizy_viewer/` — viewer em Docker (roda em qualquer máquina Linux;
+  imagem `twizy_viewer:humble`; ver tutorial).
 
 ---
 

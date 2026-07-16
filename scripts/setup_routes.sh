@@ -1,51 +1,56 @@
 #!/bin/bash
-# Rotas /32 para câmeras GigE em adaptadores USB com subnets sobrepostas (169.254.0.0/16).
+# Rotas /32 para câmeras GigE em adaptadores com subnets sobrepostas (169.254.0.0/16).
 #
-# Problema: múltiplos adaptadores USB-Ethernet na mesma subnet 169.254.0.0/16.
+# Problema: múltiplas interfaces na mesma subnet 169.254.0.0/16.
 # Sem rotas /32, o kernel usa a rota /16 com menor métrica, enviando
 # pacotes para a interface errada.
 #
-# Este script cria rotas host (/32) para cada câmera, forçando o tráfego
-# pela interface USB correta. O IP de origem é detectado automaticamente.
-#
-# === CARRO ===
-# Com portas gigabit dedicadas, cada câmera terá sua própria subnet.
-# Este script não será necessário (ou será simplificado).
+# Fonte de configuração: cameras.yaml — campos opcionais `ip` e `iface`
+# de cada câmera. Câmeras sem esses campos são ignoradas.
+# Para descobrir IPs e seriais: scripts/list_cameras.py
 
 set -e
 
-# --- Mapeamento câmera -> interface ---
-# Atualize os IPs se as câmeras mudarem de endereço (ver list_cameras.py)
-CAM1_IP="169.254.10.197"
-CAM1_IFACE="enx5c5310faf11f"
+CONFIG="${CAMERA_CONFIG:-/arena_camera_ros2/ros2_ws/src/arena_camera_node/config/cameras.yaml}"
 
-CAM2_IP="169.254.153.193"
-CAM2_IFACE="enxdc3262cf8709"
+if [[ ! -f "$CONFIG" ]]; then
+    echo "[setup_routes] config não encontrado: $CONFIG — nenhuma rota a configurar"
+    exit 0
+fi
+
+ROUTES=$(python3 - "$CONFIG" <<'PYEOF' 2>/dev/null
+import sys, yaml
+with open(sys.argv[1], encoding="utf-8") as f:
+    config = yaml.safe_load(f) or {}
+for cam in config.get("cameras", []):
+    ip, iface = cam.get("ip", ""), cam.get("iface", "")
+    if ip and iface:
+        print(f"{ip}:{iface}")
+PYEOF
+) || { echo "[setup_routes] python3/pyyaml indisponível — pulando rotas"; exit 0; }
+
+if [[ -z "$ROUTES" ]]; then
+    echo "[setup_routes] nenhuma câmera com ip/iface em $CONFIG — nada a configurar"
+    exit 0
+fi
 
 get_iface_ip() {
     local iface="$1"
     ip -4 addr show "$iface" 2>/dev/null | grep -oP '(?<=inet )169\.254\.\d+\.\d+' | head -1
 }
 
-setup_camera_route() {
-    local cam_name="$1"
-    local cam_ip="$2"
-    local cam_iface="$3"
+echo "=== Configurando rotas para câmeras GigE ==="
+for route in $ROUTES; do
+    cam_ip="${route%%:*}"
+    cam_iface="${route#*:}"
 
-    local src_ip
     src_ip=$(get_iface_ip "$cam_iface")
-
     if [[ -z "$src_ip" ]]; then
-        echo "[WARN] ${cam_name}: interface ${cam_iface} sem IP 169.254.x.x — pulando"
-        return 1
+        echo "[WARN] ${cam_iface} sem IP 169.254.x.x — pulando ${cam_ip}"
+        continue
     fi
 
-    # Rota /32 garante que pacotes para esta câmera usem a interface correta
     ip route replace "${cam_ip}/32" dev "${cam_iface}" src "${src_ip}" 2>/dev/null || true
-    echo "[OK] ${cam_name}: ${cam_ip} via ${cam_iface} (src ${src_ip})"
-}
-
-echo "=== Configurando rotas para câmeras GigE ==="
-setup_camera_route "Camera 1 (${CAM1_IP})" "$CAM1_IP" "$CAM1_IFACE"
-setup_camera_route "Camera 2 (${CAM2_IP})" "$CAM2_IP" "$CAM2_IFACE"
+    echo "[OK] ${cam_ip} via ${cam_iface} (src ${src_ip})"
+done
 echo "=== Rotas configuradas ==="

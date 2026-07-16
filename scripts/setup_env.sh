@@ -7,16 +7,8 @@
 # tanto dentro do container Docker quanto em instalações nativas.
 #
 
-# Detectar se está em container Docker ou nativo
-if [ -f /.dockerenv ]; then
-    ARENA_ROOT="/ArenaSDK_Linux_x64"
-else
-    # Instalação nativa (distrobox, toolbox, etc)
-    ARENA_ROOT="/ArenaSDK_Linux_x64"
-fi
-
 # Configurar variáveis de ambiente do ArenaSDK
-export ARENA_ROOT
+export ARENA_ROOT="/ArenaSDK_Linux_x64"
 export GENICAM_GENTL64_PATH="${ARENA_ROOT}/lib64"
 export LD_LIBRARY_PATH="${ARENA_ROOT}/lib64:${ARENA_ROOT}/GenICam/library/lib/Linux64_x64:${ARENA_ROOT}/ffmpeg:${ARENA_ROOT}/Metavision/lib:${ARENA_ROOT}/OpenCV/lib:${LD_LIBRARY_PATH}"
 

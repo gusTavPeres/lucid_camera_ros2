@@ -10,7 +10,7 @@
 # Comunicação remota (VPN):
 #   O Discovery Server roda no host e é acessível via Netbird.
 #   O notebook receptor conecta com:
-#     export ROS_DISCOVERY_SERVER=100.107.134.30:11811
+#     export ROS_DISCOVERY_SERVER=<IP_DO_SERVIDOR>:11811
 #     export FASTRTPS_DEFAULT_PROFILES_FILE=<path>/fastdds_subscriber.xml
 #     export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 
@@ -26,7 +26,7 @@ services:
     volumes:
       - ./config:/config:ro
     command: >
-      -i 0 -l 100.107.134.30
+      -i 0 -l ${DISCOVERY_SERVER_IP:-127.0.0.1}
     restart: unless-stopped
 
   camera_dev:
@@ -46,7 +46,7 @@ services:
     environment:
       - CAMERA_1_SERIAL=${CAMERA_1_SERIAL:-}
       - CAMERA_2_SERIAL=${CAMERA_2_SERIAL:-}
-      - ROS_DISCOVERY_SERVER=${ROS_DISCOVERY_SERVER:-100.107.134.30:11811}
+      - ROS_DISCOVERY_SERVER=${ROS_DISCOVERY_SERVER:-127.0.0.1:11811}
       - ROS_SUPER_CLIENT=${ROS_SUPER_CLIENT:-true}
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}

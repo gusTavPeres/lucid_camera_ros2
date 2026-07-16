@@ -143,7 +143,7 @@ if ! grep -q "source /opt/ros/humble/setup.bash" ~/.bashrc; then
 source /opt/ros/humble/setup.bash
 
 # Configuração de rede ROS2
-export ROS_DOMAIN_ID=42  # Ajuste se necessário
+export ROS_DOMAIN_ID=0  # Ajuste se necessário
 export ROS_LOCALHOST_ONLY=0  # Permitir comunicação entre PCs
 
 # Aliases úteis

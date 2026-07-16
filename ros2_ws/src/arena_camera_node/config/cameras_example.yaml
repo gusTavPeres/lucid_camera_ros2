@@ -1,89 +1,48 @@
-# Configuração de Múltiplas Câmeras Lucid Vision
-# Projeto: Carro Autônomo
+# Exemplo de cameras.yaml — copie para cameras.yaml e ajuste.
 #
-# Este arquivo define as câmeras que serão iniciadas pelo launch file.
-# Copie este arquivo para cameras.yaml e ajuste os seriais das suas câmeras.
+# Este é o ARQUIVO ÚNICO de setup das câmeras: nome, serial, ip, interface
+# ethernet, tópico, exposição/fps e resize+compressão, tudo por câmera.
+# Para descobrir seriais e IPs: python3 /arena_camera_ros2/scripts/list_cameras.py
 #
-# Para descobrir os seriais das câmeras:
-#   python3 /arena_camera_ros2/scripts/list_cameras.py
+# Campos opcionais:
+# - ip/iface: se presentes, scripts/setup_routes.sh cria rota /32 no boot
+#   (necessário só com várias interfaces na mesma subnet 169.254.0.0/16)
+# - resizer: se ausente ou enabled: false, publica só o raw
+# - CAMERA_<NOME>_SERIAL no .env, se definido, tem precedência sobre o serial
 
 cameras:
-  # Câmera Frontal
-  - name: camera_front
-    serial: "CAMERA_SERIAL_1"  # Substitua pelo serial real
-    topic: /camera/front/image_raw
+  # Exemplo completo: todos os campos
+  - name: camera_1
+    serial: "000000000"
+    ip: 169.254.0.10
+    iface: enx000000000000
+    topic: /camera_1/image_raw
     pixelformat: rgb8
-    exposure_time: 10000  # microsegundos
+    exposure_auto: true
+    exposure_time: 20000.0
     gain: 0.0
+    frame_rate: 5.0
+    frame_id: camera_1_optical_frame
     qos_reliability: reliable
     trigger_mode: false
 
-  # Câmera Frontal Esquerda
-  - name: camera_front_left
-    serial: "CAMERA_SERIAL_2"
-    topic: /camera/front_left/image_raw
-    pixelformat: rgb8
-    exposure_time: 10000
-    gain: 0.0
-    qos_reliability: reliable
-    trigger_mode: false
+    resizer:
+      enabled: true
+      name: camera_1_resizer
+      output_topic: /camera_1/image_new
+      output_width: 960
+      output_height: 540
+      interpolation: area
+      qos_reliability: best_effort
+      compression:
+        format: jpeg
+        jpeg_quality: 80
+        jpeg_compress_bayer: false
+        png_level: 3
 
-  # Câmera Frontal Direita
-  - name: camera_front_right
-    serial: "CAMERA_SERIAL_3"
-    topic: /camera/front_right/image_raw
+  # Exemplo mínimo: só raw, sem rota dedicada
+  - name: camera_2
+    serial: "000000001"
+    topic: /camera_2/image_raw
     pixelformat: rgb8
-    exposure_time: 10000
-    gain: 0.0
     qos_reliability: reliable
-    trigger_mode: false
-
-  # Câmera Lateral Esquerda
-  - name: camera_left
-    serial: "CAMERA_SERIAL_4"
-    topic: /camera/left/image_raw
-    pixelformat: rgb8
-    exposure_time: 10000
-    gain: 0.0
-    qos_reliability: reliable
-    trigger_mode: false
-
-  # Câmera Lateral Direita
-  - name: camera_right
-    serial: "CAMERA_SERIAL_5"
-    topic: /camera/right/image_raw
-    pixelformat: rgb8
-    exposure_time: 10000
-    gain: 0.0
-    qos_reliability: reliable
-    trigger_mode: false
-
-  # Câmera Traseira Esquerda
-  - name: camera_rear_left
-    serial: "CAMERA_SERIAL_6"
-    topic: /camera/rear_left/image_raw
-    pixelformat: rgb8
-    exposure_time: 10000
-    gain: 0.0
-    qos_reliability: reliable
-    trigger_mode: false
-
-  # Câmera Traseira Direita
-  - name: camera_rear_right
-    serial: "CAMERA_SERIAL_7"
-    topic: /camera/rear_right/image_raw
-    pixelformat: rgb8
-    exposure_time: 10000
-    gain: 0.0
-    qos_reliability: reliable
-    trigger_mode: false
-
-  # Câmera Traseira
-  - name: camera_rear
-    serial: "CAMERA_SERIAL_8"
-    topic: /camera/rear/image_raw
-    pixelformat: rgb8
-    exposure_time: 10000
-    gain: 0.0
-    qos_reliability: reliable
-    trigger_mode: false

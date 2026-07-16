@@ -4,7 +4,7 @@
 # Pré-requisitos no notebook:
 #   - ROS2 Humble instalado
 #   - rmw_fastrtps_cpp instalado
-#   - Netbird conectado (IP 100.107.107.160)
+#   - Rota de rede até o PC transmissor (LAN ou VPN)
 #   - cv_bridge e image_transport instalados
 #
 # Uso:
@@ -39,7 +39,10 @@ source /opt/ros/humble/setup.bash 2>/dev/null || true
 
 export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 export ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
-export ROS_DISCOVERY_SERVER=${ROS_DISCOVERY_SERVER:-100.107.134.30:11811}
+if [ -z "${ROS_DISCOVERY_SERVER:-}" ]; then
+    echo "ERRO: exporte ROS_DISCOVERY_SERVER=<IP_DO_TRANSMISSOR>:11811 antes de rodar"
+    exit 1
+fi
 export FASTRTPS_DEFAULT_PROFILES_FILE="$CONFIG_DIR/fastdds_subscriber.xml"
 
 echo "========================================"
