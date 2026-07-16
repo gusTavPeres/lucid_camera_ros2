@@ -16,15 +16,14 @@ void ArenaCameraNode::parse_parameters_()
   std::string nextParameterToDeclare = "";
   try {
     nextParameterToDeclare = "serial";
-    if (this->has_parameter("serial")) {
-        int serial_integer;
-        this->get_parameter<int>("serial", serial_integer);
+    int serial_integer = this->declare_parameter("serial", 0);
+    if (serial_integer > 0) {
         serial_ = std::to_string(serial_integer);
         is_passed_serial_ = true;
-} else {
-    serial_ = ""; // Set it to an empty string to indicate it's not passed.
-    is_passed_serial_ = false;
-}
+    } else {
+        serial_ = ""; // Set it to an empty string to indicate it's not passed.
+        is_passed_serial_ = false;
+    }
     
     nextParameterToDeclare = "pixelformat";
     pixelformat_ros_ = this->declare_parameter("pixelformat", "");

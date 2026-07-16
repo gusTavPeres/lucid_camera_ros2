@@ -55,25 +55,18 @@ RUN wget -qO- "https://cmake.org/files/v3.17/cmake-3.17.0-Linux-x86_64.tar.gz" |
 # ARENA SDK
 # ============================================================================
 
-# Argumentos para localização dos arquivos SDK
-ARG arenasdk_root_on_host=./resources/ArenaSDK/linux64
-ARG arenasdk_parent=/
-ARG arenasdk_root=${arenasdk_parent}/ArenaSDK_Linux_x64
+ARG arenasdk_tarball_on_host=./resources/ArenaSDK/linux64/ArenaSDK_Linux_x64.tar.gz
+ARG arenasdk_conf_on_host=./resources/ArenaSDK/linux64/Arena_SDK_Linux_x64.sh
+ARG arenasdk_root=/ArenaSDK_Linux_x64
 
 ARG arena_api_root_on_host=./resources/arena_api
 ARG arena_api_parent=/arena_api
 
-# Copiar e extrair ArenaSDK
-ADD ${arenasdk_root_on_host}/*.tar.gz ${arenasdk_parent}
+ADD ${arenasdk_tarball_on_host} /
 
-# Configurar ArenaSDK manualmente (criar Arena_SDK.conf)
-# Usando caminho fixo pois ARGs não expandem em RUN
-RUN echo "/ArenaSDK_Linux_x64/lib64" > /etc/ld.so.conf.d/Arena_SDK.conf && \
-    echo "/ArenaSDK_Linux_x64/GenICam/library/lib/Linux64_x64" >> /etc/ld.so.conf.d/Arena_SDK.conf && \
-    echo "/ArenaSDK_Linux_x64/ffmpeg" >> /etc/ld.so.conf.d/Arena_SDK.conf && \
-    echo "/ArenaSDK_Linux_x64/Metavision/lib" >> /etc/ld.so.conf.d/Arena_SDK.conf && \
-    echo "/ArenaSDK_Linux_x64/OpenCV/lib" >> /etc/ld.so.conf.d/Arena_SDK.conf && \
-    ldconfig && \
+COPY ${arenasdk_conf_on_host} /opt/arena_sdk/Arena_SDK_Linux_x64.sh
+RUN chmod +x /opt/arena_sdk/Arena_SDK_Linux_x64.sh && \
+    /opt/arena_sdk/Arena_SDK_Linux_x64.sh && \
     echo "Arena_SDK.conf criado:" && cat /etc/ld.so.conf.d/Arena_SDK.conf
 
 # Configurar variáveis de ambiente do ArenaSDK
